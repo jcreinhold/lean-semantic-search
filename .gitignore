@@ -1,0 +1,13 @@
+# Rust build outputs.
+target/
+
+# Lean build outputs.
+**/.lake/
+**/lake-manifest.json
+
+# Local semantic-search scratch data.
+**/.lean-semantic-search/
+
+# macOS metadata.
+**/.DS_Store
+

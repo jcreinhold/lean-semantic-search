@@ -1,0 +1,10 @@
+# mdwright configuration for this repository's Markdown docs.
+
+[fmt]
+wrap = 120
+
+[lint]
+preset = "default"
+
+[render]
+profile = "pulldown"

@@ -1,0 +1,67 @@
+# Configuration for cargo-deny
+# See https://embarkstudios.github.io/cargo-deny/checks/cfg.html
+
+[graph]
+all-features = true
+targets = [
+  "aarch64-apple-darwin",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+  "x86_64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+]
+
+[advisories]
+# The path where the advisory database is cloned/fetched into.
+db-path = "~/.cargo/advisory-db"
+# The url(s) of the advisory databases to use.
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Alert when workspace dependencies are unmaintained without drowning the
+# signal in every transitive dependency warning.
+unmaintained = "workspace"
+# The lint level for crates yanked from their source registry.
+yanked = "warn"
+# Advisory IDs intentionally ignored by this workspace.
+ignore = []
+
+[licenses]
+# Permissive licenses compatible with this workspace's MIT OR Apache-2.0
+# dual license. MPL-2.0 is accepted at file-level copyleft scope.
+allow = [
+  "0BSD",
+  "Apache-2.0 WITH LLVM-exception",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Zlib",
+]
+confidence-threshold = 0.95
+unused-allowed-license = "allow"
+
+[licenses.private]
+ignore = false
+
+[bans]
+allow = []
+deny = []
+highlight = "all"
+multiple-versions = "warn"
+skip = []
+skip-tree = []
+wildcards = "allow"
+
+[sources]
+allow-git = []
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+unknown-git = "warn"
+unknown-registry = "warn"

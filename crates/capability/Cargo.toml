@@ -1,0 +1,20 @@
+[package]
+authors = { workspace = true }
+description = "Worker-facing command identity and foundation responses for Lean semantic search."
+edition = { workspace = true }
+license = { workspace = true }
+name = "lean-semantic-search-capability"
+readme = "README.md"
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+lean-semantic-search-contract = { workspace = true }
+serde_json = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

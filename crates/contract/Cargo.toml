@@ -1,0 +1,20 @@
+[package]
+authors = { workspace = true }
+description = "Stable JSON DTOs and version markers for Lean semantic search."
+edition = { workspace = true }
+license = { workspace = true }
+name = "lean-semantic-search-contract"
+readme = "README.md"
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
