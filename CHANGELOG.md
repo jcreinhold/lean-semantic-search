@@ -10,6 +10,20 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Added
+
+- `lean-semantic-search-retrieval`: a `Corpus` trait — the storage seam a later persistent store implements — with the
+  in-memory inverted index as the reference implementation, and `retrieve_across` for fanning one anchor across a slice
+  of corpora into one bounded, ranked list.
+
+### Changed
+
+- `lean-semantic-search-retrieval`: bounded selection now bounds a fingerprint/statement lane and a role/binder lane
+  separately and unions them, so a selective role match is not crowded out behind a fingerprint cohort.
+  `RETRIEVAL_POLICY_VERSION` moves to `lean-semantic-search.retrieval.v2`. Ranking accumulates by `declaration_id`
+  rather than a dense row index, so a non-contiguous backend can implement `Corpus`. See
+  `docs/architecture/04-persistence.md`.
+
 ## [0.1.0]
 
 Initial release of the shared semantic-search package for Lean tooling.

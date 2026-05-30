@@ -9,7 +9,9 @@
 use lean_semantic_search_contract::{
     DeclarationFeatureRow, Fingerprints, OpaqueFeatureKey, ProofGoalFeatureRow, RoleFeature, SEMANTIC_FEATURE_VERSION,
 };
-use lean_semantic_search_retrieval::{Anchor, Candidate, FeatureFamily, Retrieval, SemanticIndex};
+use lean_semantic_search_retrieval::{
+    Anchor, Candidate, Corpus, FeatureFamily, Retrieval, SemanticIndex, retrieve_across,
+};
 
 fn key(value: &str) -> OpaqueFeatureKey {
     OpaqueFeatureKey::new(value)
@@ -112,7 +114,7 @@ fn role_feature_matching_aggregates_contributions() -> Result<(), String> {
     );
 
     let index = SemanticIndex::from_declarations(&[candidate]);
-    let retrieval = index.retrieve(&Anchor::from_declaration(&anchor_row), 10);
+    let retrieval = retrieve_across(&[&index], &Anchor::from_declaration(&anchor_row), 10);
 
     let found = find(&retrieval, "cand").ok_or_else(|| "expected candidate `cand`".to_owned())?;
     assert_eq!(match_count(found, FeatureFamily::RoleConclusionConst), 2);
@@ -136,7 +138,7 @@ fn broad_head_only_match_is_not_admitted() {
     );
 
     let index = SemanticIndex::from_declarations(&[candidate]);
-    let retrieval = index.retrieve(&Anchor::from_declaration(&anchor_row), 10);
+    let retrieval = retrieve_across(&[&index], &Anchor::from_declaration(&anchor_row), 10);
 
     assert!(
         retrieval.candidates.is_empty(),
@@ -163,7 +165,7 @@ fn high_fanout_role_postings_are_pruned_with_stable_diagnostics() {
     );
 
     let index = SemanticIndex::from_declarations(&corpus);
-    let retrieval = index.retrieve(&Anchor::from_declaration(&anchor_row), 50);
+    let retrieval = retrieve_across(&[&index], &Anchor::from_declaration(&anchor_row), 50);
 
     let pruned = retrieval
         .diagnostics
@@ -202,7 +204,7 @@ fn bounded_top_k_records_saturation_without_panicking() {
     );
 
     let index = SemanticIndex::from_declarations(&corpus);
-    let retrieval = index.retrieve(&Anchor::from_declaration(&anchor_row), 2);
+    let retrieval = retrieve_across(&[&index], &Anchor::from_declaration(&anchor_row), 2);
 
     assert_eq!(
         retrieval.candidates.len(),
@@ -245,7 +247,7 @@ fn rarity_weighting_orders_selective_features_above_broad() -> Result<(), String
     );
 
     let index = SemanticIndex::from_declarations(&corpus);
-    let retrieval = index.retrieve(&Anchor::from_declaration(&anchor_row), 100);
+    let retrieval = retrieve_across(&[&index], &Anchor::from_declaration(&anchor_row), 100);
 
     let selective = find(&retrieval, "selective").ok_or_else(|| "expected `selective`".to_owned())?;
     let broad = find(&retrieval, "broad").ok_or_else(|| "expected `broad`".to_owned())?;
@@ -265,7 +267,7 @@ fn proof_goal_anchor_retrieves_from_source_backed_rows() -> Result<(), String> {
     let candidate = declaration("lemma", fingerprints("shared"), Vec::new());
 
     let index = SemanticIndex::from_declarations(&[candidate]);
-    let retrieval = index.retrieve(&Anchor::from_proof_goal(&goal), 10);
+    let retrieval = retrieve_across(&[&index], &Anchor::from_proof_goal(&goal), 10);
 
     let found = find(&retrieval, "lemma").ok_or_else(|| "expected `lemma`".to_owned())?;
     assert_eq!(found.rank, 1);
@@ -287,7 +289,7 @@ fn public_results_expose_no_audit_vocabulary_or_raw_keys() -> Result<(), String>
     );
 
     let index = SemanticIndex::from_declarations(&[candidate]);
-    let retrieval = index.retrieve(&Anchor::from_declaration(&anchor_row), 10);
+    let retrieval = retrieve_across(&[&index], &Anchor::from_declaration(&anchor_row), 10);
     let serialized = serde_json::to_string(&retrieval).map_err(|error| error.to_string())?;
 
     // Family labels are present; raw keys and display text are not.
@@ -311,6 +313,216 @@ fn public_results_expose_no_audit_vocabulary_or_raw_keys() -> Result<(), String>
         assert!(
             !serialized.contains(forbidden),
             "result leaked `{forbidden}`: {serialized}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn corpus_answers_fanout_postings_and_anchor_reconstruction() -> Result<(), String> {
+    // `a` and `b` share a statement fingerprint; only `a` carries the role key.
+    let a = declaration(
+        "a",
+        fingerprints("shared"),
+        vec![role("conclusion_const", "role-k", "Foo")],
+    );
+    let b = declaration("b", fingerprints("shared"), Vec::new());
+    let index = SemanticIndex::from_declarations(&[a.clone(), b]);
+
+    assert_eq!(index.document_total(), 2, "document total counts every row once");
+
+    // Batched fanout matches a direct count of who carries each key, in order.
+    let shared_statement = key("shared-stmt");
+    let role_key = key("role-k");
+    let absent = key("carried-by-nobody");
+    assert_eq!(
+        index.fanout(&[shared_statement.clone(), role_key.clone(), absent]),
+        vec![2, 1, 0]
+    );
+
+    // Postings name exactly the declarations carrying the key.
+    let mut shared_ids = index.postings(&shared_statement, 10);
+    shared_ids.sort();
+    assert_eq!(shared_ids, vec!["a".to_owned(), "b".to_owned()]);
+    assert_eq!(index.postings(&role_key, 10), vec!["a".to_owned()]);
+    // A tighter limit bounds the scan.
+    assert_eq!(index.postings(&shared_statement, 1).len(), 1);
+
+    // A corpus member rebuilds into the exact row it was built from.
+    let rebuilt = index
+        .declaration_row("a")
+        .ok_or_else(|| "expected row `a`".to_owned())?;
+    assert_eq!(rebuilt, a);
+    assert!(index.declaration_row("not-in-corpus").is_none());
+    Ok(())
+}
+
+#[test]
+fn fan_out_merges_candidates_from_every_corpus() -> Result<(), String> {
+    // Each corpus shares a different fingerprint with the anchor, so each
+    // contributes its own candidate; the merged list is bounded and ranked.
+    let anchor_row = declaration(
+        "anchor",
+        Fingerprints {
+            statement: key("alpha-stmt"),
+            safe_binder_permutation: key("beta-safe"),
+            connective_shape: key("anchor-conn"),
+            conclusion_shape: key("anchor-concl"),
+        },
+        Vec::new(),
+    );
+    let left = SemanticIndex::from_declarations(&[declaration("from-left", fingerprints("alpha"), Vec::new())]);
+    let right = SemanticIndex::from_declarations(&[declaration("from-right", fingerprints("beta"), Vec::new())]);
+
+    let retrieval = retrieve_across(&[&left, &right], &Anchor::from_declaration(&anchor_row), 10);
+    let ids: Vec<&str> = retrieval
+        .candidates
+        .iter()
+        .map(|candidate| candidate.declaration_id.as_str())
+        .collect();
+    assert!(ids.contains(&"from-left"), "missing left corpus candidate: {ids:?}");
+    assert!(ids.contains(&"from-right"), "missing right corpus candidate: {ids:?}");
+
+    // Order is deterministic across runs and stable under corpus order.
+    let reversed = retrieve_across(&[&right, &left], &Anchor::from_declaration(&anchor_row), 10);
+    assert_eq!(retrieval, reversed, "merged order must not depend on corpus order");
+    Ok(())
+}
+
+#[test]
+fn shared_declaration_across_corpora_merges_once_with_summed_contributions() -> Result<(), String> {
+    // The same declaration id sits in two corpora, each matching the anchor on a
+    // different fingerprint. It must appear once, crediting both families.
+    let anchor_row = declaration("anchor", fingerprints("shared"), Vec::new());
+    // Corpus members that share the anchor's statement / conclusion fingerprint
+    // respectively but under the same id.
+    let statement_side = DeclarationFeatureRow {
+        fingerprints: Fingerprints {
+            statement: key("shared-stmt"),
+            safe_binder_permutation: key("x-safe"),
+            connective_shape: key("x-conn"),
+            conclusion_shape: key("x-concl"),
+        },
+        ..declaration("dup", fingerprints("x"), Vec::new())
+    };
+    let conclusion_side = DeclarationFeatureRow {
+        fingerprints: Fingerprints {
+            statement: key("y-stmt"),
+            safe_binder_permutation: key("y-safe"),
+            connective_shape: key("y-conn"),
+            conclusion_shape: key("shared-concl"),
+        },
+        ..declaration("dup", fingerprints("y"), Vec::new())
+    };
+    let left = SemanticIndex::from_declarations(&[statement_side]);
+    let right = SemanticIndex::from_declarations(&[conclusion_side]);
+
+    let retrieval = retrieve_across(&[&left, &right], &Anchor::from_declaration(&anchor_row), 10);
+    let dup: Vec<&Candidate> = retrieval
+        .candidates
+        .iter()
+        .filter(|candidate| candidate.declaration_id == "dup")
+        .collect();
+    assert_eq!(dup.len(), 1, "a shared id must merge into a single candidate");
+    let dup = dup
+        .first()
+        .ok_or_else(|| "expected the merged `dup` candidate".to_owned())?;
+    assert_eq!(match_count(dup, FeatureFamily::StatementFingerprint), 1);
+    assert_eq!(match_count(dup, FeatureFamily::ConclusionFingerprint), 1);
+    Ok(())
+}
+
+#[test]
+fn role_lane_keeps_a_selective_match_a_fingerprint_cohort_would_evict() -> Result<(), String> {
+    // A cohort of candidates shares all of the anchor's fingerprints, so their
+    // total scores dwarf a lone candidate that matches only a selective role key.
+    // A single combined top-k would evict the role match; the role lane keeps it.
+    let mut corpus = Vec::new();
+    for index in 0..8 {
+        corpus.push(declaration(&format!("fp-{index}"), fingerprints("anchor"), Vec::new()));
+    }
+    corpus.push(declaration(
+        "role-only",
+        fingerprints("unrelated"),
+        vec![role("conclusion_const", "rare-role", "Rare")],
+    ));
+    let anchor_row = declaration(
+        "anchor",
+        fingerprints("anchor"),
+        vec![role("conclusion_const", "rare-role", "Rare")],
+    );
+
+    let index = SemanticIndex::from_declarations(&corpus);
+    let retrieval = retrieve_across(&[&index], &Anchor::from_declaration(&anchor_row), 2);
+
+    assert!(
+        find(&retrieval, "role-only").is_some(),
+        "the role lane must rescue the selective role match: {:?}",
+        retrieval
+            .candidates
+            .iter()
+            .map(|candidate| candidate.declaration_id.as_str())
+            .collect::<Vec<_>>()
+    );
+    // The fingerprint cohort is still represented too.
+    assert!(
+        retrieval.candidates.iter().any(|c| c.declaration_id.starts_with("fp-")),
+        "the fingerprint lane must still contribute its cohort"
+    );
+    Ok(())
+}
+
+#[test]
+fn accumulation_by_id_ranks_a_stronger_total_first() -> Result<(), String> {
+    // `strong` shares the anchor's statement fingerprint and a role key; `weak`
+    // shares only the role key. Accumulating per declaration id, `strong` must
+    // outrank `weak`, and each id appears exactly once.
+    let anchor_row = declaration(
+        "anchor",
+        fingerprints("shared"),
+        vec![role("conclusion_const", "role-k", "Foo")],
+    );
+    let strong = declaration(
+        "strong",
+        fingerprints("shared"),
+        vec![role("conclusion_const", "role-k", "Foo")],
+    );
+    let weak = declaration(
+        "weak",
+        fingerprints("unrelated"),
+        vec![role("conclusion_const", "role-k", "Foo")],
+    );
+
+    let index = SemanticIndex::from_declarations(&[strong, weak]);
+    let retrieval = retrieve_across(&[&index], &Anchor::from_declaration(&anchor_row), 10);
+
+    let strong = find(&retrieval, "strong").ok_or_else(|| "expected `strong`".to_owned())?;
+    let weak = find(&retrieval, "weak").ok_or_else(|| "expected `weak`".to_owned())?;
+    assert_eq!(strong.rank, 1, "the stronger total must rank first");
+    assert_eq!(weak.rank, 2);
+    assert_eq!(retrieval.candidates.len(), 2, "each id appears exactly once");
+    Ok(())
+}
+
+#[test]
+fn fan_out_path_exposes_no_raw_keys_or_audit_vocabulary() -> Result<(), String> {
+    let anchor_row = declaration(
+        "anchor",
+        fingerprints("SECRET-anchor"),
+        vec![role("conclusion_const", "SECRET-role-key", "Foo")],
+    );
+    let index = SemanticIndex::from_declarations(&[declaration(
+        "cand",
+        fingerprints("SECRET-anchor"),
+        vec![role("conclusion_const", "SECRET-role-key", "Foo")],
+    )]);
+
+    let retrieval = retrieve_across(&[&index], &Anchor::from_declaration(&anchor_row), 10);
+    let serialized = serde_json::to_string(&retrieval).map_err(|error| error.to_string())?;
+    for leaked in ["SECRET-anchor", "SECRET-role-key", "Foo", "-stmt", "posting", "heap"] {
+        assert!(
+            !serialized.contains(leaked),
+            "fan-out result leaked `{leaked}`: {serialized}"
         );
     }
     Ok(())

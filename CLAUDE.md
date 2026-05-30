@@ -65,10 +65,12 @@ steps:
 - `capability`: worker-facing command names, export names, advertised facts, empty-diagnostic helpers. Intentionally
   small: command identity over generic transport.
 - `retrieval`: storage-neutral semantic candidate generation over feature rows. Hides ranking weights, rarity weighting,
-  fanout/posting limits, broad-head pruning, and bounded top-k. Callers see `rank` + feature-family explanations +
-  diagnostics, never postings, heaps, composite scores, or raw keys. In-memory only—no storage, persistence, or
-  downstream ranking policy. Carries its own `RETRIEVAL_POLICY_VERSION` (`lean-semantic-search.retrieval.v1`); adds no
-  DTOs to `contract`.
+  fanout/posting limits, broad-head pruning, and the multi-lane bounded top-k. Callers see ranked candidates +
+  feature-family explanations + diagnostics, never postings, heaps, composite scores, or raw keys. Ranks over a `Corpus`
+  trait (the seam a later persistent store fills) with the in-memory inverted index as the reference impl; `retrieve_across`
+  fans one anchor across a slice of corpora. No storage dependency, no on-disk layout, no downstream ranking policy in
+  this crate. Carries its own `RETRIEVAL_POLICY_VERSION` (`lean-semantic-search.retrieval.v2`); adds no DTOs to
+  `contract`. See `docs/architecture/04-persistence.md`.
 
 **The Lean exports and Rust constants must stay in lockstep.** The five `@[export lean_semantic_search_*]` functions in
 `Capability.lean` correspond one-to-one to the `*_EXPORT`/`*_COMMAND` constants in `crates/capability/src/lib.rs`, and

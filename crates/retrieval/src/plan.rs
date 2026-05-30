@@ -11,15 +11,19 @@
 
 use std::collections::HashSet;
 
-use lean_semantic_search_contract::{DeclarationFeatureRow, Fingerprints, ProofGoalFeatureRow, RoleFeature};
+use lean_semantic_search_contract::{
+    DeclarationFeatureRow, Fingerprints, OpaqueFeatureKey, ProofGoalFeatureRow, RoleFeature,
+};
 
 use crate::FeatureFamily;
 use crate::explain::family_for_role;
 use crate::policy;
 
-/// One weighted lookup key derived from an anchor.
+/// One weighted lookup key derived from an anchor. The key stays an opaque
+/// equality token end to end — it is what a [`Corpus`](crate::Corpus) is asked
+/// for, never an encoding the crate inspects.
 pub(crate) struct PlannedKey {
-    pub(crate) key: String,
+    pub(crate) key: OpaqueFeatureKey,
     pub(crate) family: FeatureFamily,
     pub(crate) base_weight: f64,
     pub(crate) posting_limit: usize,
@@ -71,29 +75,29 @@ fn broad_head_displays(low_signal_markers: &[String]) -> HashSet<&str> {
 fn push_fingerprints(fingerprints: &Fingerprints, out: &mut Vec<PlannedKey>) {
     let entries = [
         (
-            fingerprints.statement.as_str(),
+            &fingerprints.statement,
             FeatureFamily::StatementFingerprint,
             policy::STATEMENT_WEIGHT,
         ),
         (
-            fingerprints.safe_binder_permutation.as_str(),
+            &fingerprints.safe_binder_permutation,
             FeatureFamily::SafePermutationFingerprint,
             policy::SAFE_PERMUTATION_WEIGHT,
         ),
         (
-            fingerprints.connective_shape.as_str(),
+            &fingerprints.connective_shape,
             FeatureFamily::ConnectiveFingerprint,
             policy::CONNECTIVE_WEIGHT,
         ),
         (
-            fingerprints.conclusion_shape.as_str(),
+            &fingerprints.conclusion_shape,
             FeatureFamily::ConclusionFingerprint,
             policy::CONCLUSION_WEIGHT,
         ),
     ];
     for (key, family, base_weight) in entries {
         out.push(PlannedKey {
-            key: key.to_owned(),
+            key: key.clone(),
             family,
             base_weight,
             // Exact structural keys are selective by construction; never pruned.
@@ -115,7 +119,7 @@ fn push_role_features(role_features: &[RoleFeature], broad_heads: &HashSet<&str>
             policy::ROLE_POSTING_LIMIT
         };
         out.push(PlannedKey {
-            key: feature.key.as_str().to_owned(),
+            key: feature.key.clone(),
             family: family_for_role(&feature.role),
             base_weight: policy::role_weight(&feature.role, broad_head),
             posting_limit,

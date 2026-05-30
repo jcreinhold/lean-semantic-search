@@ -15,25 +15,40 @@
 //! elaborated expressions, never from rendered goal text.
 //!
 //! ```no_run
-//! use lean_semantic_search_retrieval::{Anchor, SemanticIndex};
+//! use lean_semantic_search_retrieval::{Anchor, SemanticIndex, retrieve_across};
 //! # use lean_semantic_search_contract::{DeclarationFeatureRow, ProofGoalFeatureRow};
 //! # fn demo(corpus: &[DeclarationFeatureRow], goal: &ProofGoalFeatureRow) {
 //! let index = SemanticIndex::from_declarations(corpus);
-//! let retrieval = index.retrieve(&Anchor::from_proof_goal(goal), 20);
+//! let retrieval = retrieve_across(&[&index], &Anchor::from_proof_goal(goal), 20);
 //! for candidate in &retrieval.candidates {
 //!     println!("{} (rank {})", candidate.declaration_id, candidate.rank);
 //! }
 //! # }
 //! ```
 
+mod corpus;
 mod explain;
 mod index;
 mod plan;
 mod policy;
 mod select;
 
+pub use corpus::Corpus;
 pub use index::SemanticIndex;
 pub use plan::Anchor;
+
+/// Rank one anchor against a slice of corpora, merged into a single bounded,
+/// ranked candidate list.
+///
+/// Single-corpus retrieval is the one-element case:
+/// `retrieve_across(&[&index], &anchor, limit)`. Each corpus weights by its own
+/// document total and fanout; a candidate found in more than one corpus merges
+/// by `declaration_id`. Corpus identity stays with the caller — the result names
+/// only candidates, ranks, and feature families.
+#[must_use]
+pub fn retrieve_across(corpora: &[&dyn Corpus], anchor: &Anchor, limit: usize) -> Retrieval {
+    corpus::rank(corpora, anchor, limit)
+}
 
 // Re-export the shared diagnostic so callers can read retrieval diagnostics
 // without taking a separate dependency on the contract crate.

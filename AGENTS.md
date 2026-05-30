@@ -11,13 +11,18 @@ This repository is the shared semantic-search package for `lean-dup` and `lean-h
 - Do not expose raw Lean expressions, feature-key encodings, worker framing records, storage layout, or cache paths in
   public APIs or docs.
 - Keep feature keys opaque. Callers may store and compare keys only under matching version fields.
-- Prefer concrete private modules over traits until two real implementations exist.
+- Prefer concrete private modules over traits until two real implementations exist. The `Corpus` trait in `retrieval` is
+  the deliberate exception: it is the seam a persistent store implements, introduced ahead of that second implementor;
+  see `docs/architecture/04-persistence.md`.
 - Public DTOs must carry schema or algorithm version fields when they cross repository boundaries.
 - Create Rust crates around a hidden decision, not around importance. `contract` owns schema compatibility; `capability`
   owns worker-facing command identity; `retrieval` owns candidate-search internals (ranking weights, rarity weighting,
-  fanout limits, broad-head pruning, bounded top-k). Keep ranking, fanout, and top-k policy private to `retrieval`;
-  callers see only ranks, feature-family explanations, and diagnostics. Do not add storage, persistence, or downstream
-  ranking policy to it, and do not expose raw feature keys or composite scores.
+  fanout limits, broad-head pruning, multi-lane bounded top-k). Keep ranking, fanout, and top-k policy private to
+  `retrieval`; callers see only ranks, feature-family explanations, and diagnostics. Retrieval ranks over a `Corpus`
+  trait, but takes no storage dependency: persistence enters only as that seam (a later store implements it), never as a
+  database, file, or on-disk layout in the shared crates. Do not add storage or downstream ranking policy to
+  `retrieval`, and do not expose raw feature keys or composite scores. The `Corpus` seam carries no display, provenance,
+  or audit field.
 
 ## Writing
 

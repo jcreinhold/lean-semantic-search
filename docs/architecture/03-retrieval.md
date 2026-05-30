@@ -13,9 +13,9 @@ That is a deep module.
 
 A `core` crate was the obvious alternative and the wrong one. `core` names importance, not a hidden decision; it becomes
 a bucket that accretes whatever has no better home, and its interface grows to match its contents. `retrieval` names
-what it hides, so its surface can stay small as its internals grow. The crate also does not abstract over candidate
-sources with a trait: there is one real source today — declaration rows held in memory — and a trait for a single
-implementor is a cost without a payer.
+what it hides, so its surface can stay small as its internals grow. Candidate sources are now abstracted behind a
+`Corpus` trait — not for generality, but because a second real implementor, a persistent store, is imminent and ranking
+must stay written once across both; see `04-persistence.md`.
 
 ## What stays in `contract`
 
@@ -30,9 +30,10 @@ decision rather than a Lean fact.
 ## In-memory and storage-neutral
 
 `SemanticIndex` is a view over rows the caller already holds — an inverted map from opaque key to the declarations that
-carry it, plus the document counts rarity weighting needs. There is no database, cache, or on-disk layout, so any caller
-can build an index from rows obtained however it likes: a duplicate-search index, a proof-agent corpus, a test fixture.
-Persistence and incremental indexing are caller concerns, deliberately left outside.
+carry it, plus the document counts rarity weighting needs. It is the reference implementation of the `Corpus` trait;
+there is no database, cache, or on-disk layout here, so any caller can build an index from rows obtained however it
+likes: a duplicate-search index, a proof-agent corpus, a test fixture. Persistence enters only as the `Corpus` seam a
+later store fills, never as a storage dependency in this crate; see `04-persistence.md`.
 
 ## Source-backed proof-goal retrieval
 
