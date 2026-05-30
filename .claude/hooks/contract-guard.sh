@@ -10,12 +10,20 @@
 #
 # The two contracts (CLAUDE.md, docs/architecture/01-capability-contract.md):
 #
-#   1. VERSION LOCKSTEP. Schema/algorithm version strings are centralized
-#      as constants in `crates/contract` (mirrored by `RETRIEVAL_POLICY_VERSION`
-#      in `crates/retrieval`) and mirrored as defs in the Lean `Json`
-#      module. Touching a version literal or a *_VERSION constant means the
-#      mirror side AND docs/architecture/01-capability-contract.md must move
-#      in the same change. There is no cross-language test that catches drift.
+#   1. VERSION LOCKSTEP. The contract version *values* (canonical.expr.vN,
+#      features.roles.vN, features.role_key.vN, declaration_features.vN,
+#      proof_goal_features.vN, lean-semantic-search.capability.vN) are defined
+#      as constants in `crates/contract` and mirrored as defs in the Lean
+#      `Json` module. Changing one of those value literals means the mirror
+#      side AND docs/architecture/01-capability-contract.md must move in the
+#      same change. There is no cross-language test that catches drift.
+#
+#      The retrieval policy version (lean-semantic-search.retrieval.vN /
+#      RETRIEVAL_POLICY_VERSION) is deliberately NOT part of this lockstep:
+#      it versions a ranking decision, not a Lean fact, so it lives only in
+#      `crates/retrieval` and is mirrored in neither Json.lean nor the
+#      capability contract doc (see docs/architecture/03-retrieval.md and
+#      04-persistence.md). It gets its own, separate reminder.
 #
 #   2. EXPORT/COMMAND LOCKSTEP. The five `@[export lean_semantic_search_*]`
 #      functions in Capability.lean correspond one-to-one to the
@@ -23,10 +31,11 @@
 #      the advertised commands in the contract doc. Rename/add/remove one
 #      and all three must move together.
 #
-# KNOWN TRADEOFF: these are plain greps over the edited file, so they can
-# false-positive (e.g. editing a comment or test that mentions a version
-# literal). They are advisory only, so a rare extra nudge is cheap; an
-# AST-aware check is the wrong altitude for a hook.
+# To avoid false positives, the version check matches the version *value*
+# literals (e.g. "canonical.expr.v3"), not bare *_VERSION identifier
+# references. Importing or using a version constant by name therefore does
+# not trip the hook; only writing a version value does. It stays a plain
+# grep (advisory only) — an AST-aware check is the wrong altitude for a hook.
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -42,26 +51,17 @@ esac
 
 msgs=()
 
-# 1. Version lockstep. Fires on the canonical version-owning files, or on
-#    any in-scope file that contains a known version literal / *_VERSION
-#    constant.
-version_literal_re='canonical\.expr\.v[0-9]|features\.roles\.v[0-9]|features\.role_key\.v[0-9]|lean-semantic-search\.[a-z]+\.v[0-9]|(declaration|proof_goal)_features\.v[0-9]|_VERSION\b'
-case "$file" in
-*/crates/contract/src/lib.rs | crates/contract/src/lib.rs | \
-	*/crates/retrieval/src/lib.rs | crates/retrieval/src/lib.rs | \
-	*/lean/LeanSemanticSearch/Json.lean | lean/LeanSemanticSearch/Json.lean)
-	touched_version=1
-	;;
-*)
-	if grep -Eq "$version_literal_re" "$file"; then
-		touched_version=1
-	else
-		touched_version=0
-	fi
-	;;
-esac
-if [ "${touched_version:-0}" = 1 ]; then
-	msgs+=("• You touched a schema/algorithm version in $file. Per CLAUDE.md these are a contract: the version constants in crates/contract (and RETRIEVAL_POLICY_VERSION in crates/retrieval) are mirrored by the defs in lean/LeanSemanticSearch/Json.lean. Update BOTH sides AND docs/architecture/01-capability-contract.md in the same change. Rust: CAPABILITY_SCHEMA_VERSION / DECLARATION_FEATURE_COMMAND_VERSION / PROOF_GOAL_FEATURE_COMMAND_VERSION / CANONICAL_FEATURE_VERSION / SEMANTIC_FEATURE_VERSION. Lean: schemaVersion / declarationFeatureCommandVersion / proofGoalFeatureCommandVersion / semanticFeatureVersion / roleKeyVersion.")
+# 1. Version lockstep. Match the version *value* literals, not bare
+#    identifier references, so importing/using a constant by name does not
+#    fire. The mirrored contract versions and the retrieval-only policy
+#    version get separate, accurate reminders.
+contract_version_re='canonical\.expr\.v[0-9]|features\.roles\.v[0-9]|features\.role_key\.v[0-9]|lean-semantic-search\.capability\.v[0-9]|(declaration|proof_goal)_features\.v[0-9]'
+retrieval_version_re='lean-semantic-search\.retrieval\.v[0-9]'
+if grep -Eq "$contract_version_re" "$file"; then
+	msgs+=("• You changed a contract version value in $file. These are mirrored across the Lean↔Rust boundary and have no cross-language test. Move all three together: the constants in crates/contract/src/lib.rs (CAPABILITY_SCHEMA_VERSION / DECLARATION_FEATURE_COMMAND_VERSION / PROOF_GOAL_FEATURE_COMMAND_VERSION / CANONICAL_FEATURE_VERSION / SEMANTIC_FEATURE_VERSION), the defs in lean/LeanSemanticSearch/Json.lean (schemaVersion / declarationFeatureCommandVersion / proofGoalFeatureCommandVersion / semanticFeatureVersion / roleKeyVersion), and docs/architecture/01-capability-contract.md.")
+fi
+if grep -Eq "$retrieval_version_re" "$file"; then
+	msgs+=("• You changed the retrieval policy version in $file. This one is retrieval-only by design (it versions a ranking decision, not a Lean fact): do NOT mirror it in lean/LeanSemanticSearch/Json.lean or docs/architecture/01-capability-contract.md. Keep crates/retrieval/src/policy.rs (POLICY_VERSION) and the RETRIEVAL_POLICY_VERSION re-export in sync, and reflect the bump in CHANGELOG.md and docs/architecture/04-persistence.md.")
 fi
 
 # 2. Export/command lockstep. Only the two files that own the worker ABI,
