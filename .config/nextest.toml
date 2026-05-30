@@ -1,0 +1,24 @@
+[profile.default]
+test-threads = 2
+
+# We want full visibility into all failures in a single run rather than
+# stopping at the first.
+fail-fast = false
+
+# Lean import paths legitimately take seconds on a cold process; warn
+# instead of terminating, and only kill after four consecutive periods
+# without progress (~4 minutes).
+slow-timeout = { period = "60s", terminate-after = 4 }
+
+# Env vars (LEAN_RS_NUM_THREADS=1, RUST_LOG=warn) are set in
+# `.cargo/config.toml` under `[env]` so they apply uniformly to every
+# cargo invocation (cargo test, cargo nextest, cargo run --example).
+# nextest's own env-var keys differ between versions; the cargo
+# `[env]` table is the stable single source of truth.
+
+[profile.ci]
+# CI inherits all default thresholds and adds a single automatic retry
+# so transient flakes from CI runner noise (network blips during
+# capability dylib open, etc.) don't break the build.
+fail-fast = false
+retries = 1

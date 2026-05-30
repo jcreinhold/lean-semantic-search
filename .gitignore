@@ -1,5 +1,46 @@
-# Rust build outputs.
-target/
+# Rust build output
+**/target/
+**/*.rs.bk
+
+# Cargo lock for libraries is conventionally committed at the workspace root;
+# leave Cargo.lock tracked for reproducible binaries and CI.
+
+# Lake / Lean build output (for fixtures/lean/ landing in prompt 03)
+build/
+.lake/
+*.olean
+*.bak
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Direnv
+.envrc.local
+
+# Coverage / profiling artifacts
+*.profraw
+*.profdata
+flamegraph.svg
+perf.data*
+
+# cargo-fuzz artifacts (per-run, regenerated; not source of truth)
+crates/*/fuzz/corpus/
+crates/*/fuzz/artifacts/
+crates/*/fuzz/target/
+
+# Codex system artifacts
+.system/
+
+# Claude harness state (the skills/ subtree is tracked; only ephemeral state is ignored)
+.claude/scheduled_tasks.lock
 
 # Lean build outputs.
 **/.lake/
@@ -7,7 +48,3 @@ target/
 
 # Local semantic-search scratch data.
 **/.lean-semantic-search/
-
-# macOS metadata.
-**/.DS_Store
-
