@@ -3,7 +3,9 @@ import LeanSemanticSearch.Canonical
 import LeanSemanticSearch.DeclarationFeatures
 import LeanSemanticSearch.GoalElaboration
 import LeanSemanticSearch.GoalFeatures
+import LeanSemanticSearch.Hashing
 import LeanSemanticSearch.Json
+import LeanSemanticSearch.LeanCompat
 import LeanSemanticSearch.ModuleExtraction
 import LeanSemanticSearch.RoleFeatures
 

@@ -1,4 +1,5 @@
-import Lean
+import LeanSemanticSearch.Hashing
+import LeanSemanticSearch.LeanCompat
 
 /-!
 Canonical expression fingerprints for semantic search.
@@ -7,12 +8,17 @@ The keys emitted here are opaque equality tokens: callers compare them but must
 never interpret their bytes. Traversal order, binder scheduling, universe
 encoding, and the key format stay private so they can change without breaking
 callers.
+
+This module is pure: it serializes the package-owned `StatementShape` (produced
+by `LeanCompat`) and never touches a `Lean.Expr`. A Lean toolchain change cannot
+reach it.
 -/
 
 namespace LeanSemanticSearch.Canonical
 
-open Lean
-open Lean.Meta
+open Lean (Json)
+open LeanSemanticSearch.LeanCompat
+open LeanSemanticSearch.Hashing (stableHash)
 
 /-- Semantic algorithm marker for canonical expression fingerprints. -/
 def version : String := "canonical.expr.v3"
@@ -25,26 +31,23 @@ structure Fingerprints where
   conclusionShape : String
   binderCount : Nat
 
-private def hashSeed : UInt64 := 14695981039346656037
-
-private def hashPrime : UInt64 := 1099511628211
-
-private def stableHash (text : String) : String :=
-  toString <|
-    text.foldl
-      (fun acc char => (acc ^^^ char.toNat.toUInt64) * hashPrime)
-      hashSeed
+/-- Render the four opaque keys as the response object. `binderCount` is omitted:
+    it is a count, not a key, and callers carry it as a sibling field. The JSON
+    field names are response-DTO contract and must stay byte-identical. -/
+def Fingerprints.toJson (fingerprints : Fingerprints) : Json :=
+  Json.mkObj
+    [ ("statement", Json.str fingerprints.statement)
+    , ("safe_binder_permutation", Json.str fingerprints.safeBinderPermutation)
+    , ("connective_shape", Json.str fingerprints.connectiveShape)
+    , ("conclusion_shape", Json.str fingerprints.conclusionShape)
+    ]
 
 private def fingerprintKey (kind body : String) : String :=
   s!"{version}:{kind}:{stableHash body}"
 
-private structure LevelContext where
-  params : Std.HashMap Name Nat
-
-private abbrev FVarOrdinals := Std.HashMap FVarId Nat
+private abbrev FVarOrdinals := Std.HashMap Lean.Name Nat
 
 private structure SerializerContext where
-  levels : LevelContext
   fvars : FVarOrdinals
 
 private inductive ExprMode where
@@ -52,52 +55,28 @@ private inductive ExprMode where
   | connective
   deriving BEq
 
-private structure Binder where
-  index : Nat
-  fvar : Expr
-  type : Expr
-  binderInfo : BinderInfo
-  deps : Array Nat
-
-private def levelContext (params : List Name) : LevelContext := Id.run do
-  let mut map : Std.HashMap Name Nat := {}
-  let mut index := 0
-  for param in params do
-    map := map.insert param index
-    index := index + 1
-  pure { params := map }
-
-private partial def levelKey (ctx : LevelContext) : Level → String
+private partial def levelKey : LevelShape → String
   | .zero => "0"
-  | .succ level => s!"s({levelKey ctx level})"
-  | .max left right => s!"max({levelKey ctx left},{levelKey ctx right})"
-  | .imax left right => s!"imax({levelKey ctx left},{levelKey ctx right})"
-  | .param name =>
-      match ctx.params.get? name with
-      | some index => s!"p{index}"
-      | none => s!"p:{name}"
-  | .mvar mvarId => s!"m:{mvarId.name}"
+  | .succ level => s!"s({levelKey level})"
+  | .max left right => s!"max({levelKey left},{levelKey right})"
+  | .imax left right => s!"imax({levelKey left},{levelKey right})"
+  | .paramOrdinal index => s!"p{index}"
+  | .paramName name => s!"p:{name}"
+  | .mvar name => s!"m:{name}"
 
-private def binderInfoKey : BinderInfo → String
+private def binderInfoKey : Lean.BinderInfo → String
   | .default => "explicit"
   | .implicit => "implicit"
   | .strictImplicit => "strictImplicit"
   | .instImplicit => "instImplicit"
 
-private def appFnArgs (expr : Expr) : Expr × Array Expr :=
-  let rec go (current : Expr) (args : Array Expr) :=
-    match current with
-    | .app fn arg => go fn (args.push arg)
-    | other => (other, args.reverse)
-  go expr #[]
-
 private def sortParts (parts : Array String) : String :=
   String.intercalate "," (parts.qsort (· < ·)).toList
 
-private def fvarKey (ctx : SerializerContext) (fvarId : FVarId) : String :=
-  match ctx.fvars.get? fvarId with
+private def fvarKey (ctx : SerializerContext) (name : Lean.Name) : String :=
+  match ctx.fvars.get? name with
   | some index => s!"v{index}"
-  | none => s!"free:{fvarId.name}"
+  | none => s!"free:{name}"
 
 private def exprNodeBudget : Nat := 4000
 
@@ -107,7 +86,7 @@ private partial def exprKeyCore
     (ctx : SerializerContext)
     (mode : ExprMode)
     (depth : Nat)
-    (expr : Expr) : StateM Nat String := do
+    (expr : ExprShape) : StateM Nat String := do
   let remaining ← get
   if remaining == 0 then
     pure "(truncated budget)"
@@ -117,14 +96,13 @@ private partial def exprKeyCore
     set (remaining - 1)
     match expr with
     | .bvar index => pure s!"b{index}"
-    | .fvar fvarId => pure (fvarKey ctx fvarId)
-    | .mvar mvarId => pure s!"mvar:{mvarId.name}"
-    | .sort level => pure s!"(sort {levelKey ctx.levels (Level.normalize level)})"
+    | .fvar name => pure (fvarKey ctx name)
+    | .mvar name => pure s!"mvar:{name}"
+    | .sort level => pure s!"(sort {levelKey level})"
     | .const name levels =>
-        let levelKeys := levels.map fun level => levelKey ctx.levels (Level.normalize level)
-        pure s!"(const {name}[{String.intercalate "," levelKeys}])"
-    | app@(.app ..) =>
-        let (head, args) := appFnArgs app
+        let levelKeys := levels.map levelKey
+        pure s!"(const {name}[{String.intercalate "," levelKeys.toList}])"
+    | .app head args =>
         if mode == .connective then
           match head, args.toList with
           | .const ``And _, [left, right] =>
@@ -147,22 +125,22 @@ private partial def exprKeyCore
           | _, _ => appKey ctx mode (depth - 1) head args
         else
           appKey ctx mode (depth - 1) head args
-    | .lam _ domain body binderInfo =>
+    | .lam info domain body =>
         let domainKey ← exprKeyCore ctx mode (depth - 1) domain
         let bodyKey ← exprKeyCore ctx mode (depth - 1) body
-        pure s!"(lam {binderInfoKey binderInfo} {domainKey} {bodyKey})"
-    | .forallE _ domain body binderInfo =>
+        pure s!"(lam {binderInfoKey info} {domainKey} {bodyKey})"
+    | .forallE info domain body =>
         let domainKey ← exprKeyCore ctx mode (depth - 1) domain
         let bodyKey ← exprKeyCore ctx mode (depth - 1) body
-        pure s!"(forall {binderInfoKey binderInfo} {domainKey} {bodyKey})"
-    | .letE _ type value body _ =>
+        pure s!"(forall {binderInfoKey info} {domainKey} {bodyKey})"
+    | .letE type value body =>
         let typeKey ← exprKeyCore ctx mode (depth - 1) type
         let valueKey ← exprKeyCore ctx mode (depth - 1) value
         let bodyKey ← exprKeyCore ctx mode (depth - 1) body
         pure s!"(let {typeKey} {valueKey} {bodyKey})"
-    | .lit (.natVal value) => pure s!"(nat {value})"
-    | .lit (.strVal value) => pure s!"(str {value.length}:{value})"
-    | .mdata _ body => exprKeyCore ctx mode (depth - 1) body
+    | .natLit value => pure s!"(nat {value})"
+    | .strLit value => pure s!"(str {value.length}:{value})"
+    | .mdata body => exprKeyCore ctx mode (depth - 1) body
     | .proj typeName index body =>
         let bodyKey ← exprKeyCore ctx mode (depth - 1) body
         pure s!"(proj {typeName}.{index} {bodyKey})"
@@ -171,55 +149,30 @@ where
       (ctx : SerializerContext)
       (mode : ExprMode)
       (depth : Nat)
-      (head : Expr)
-      (args : Array Expr) : StateM Nat String := do
+      (head : ExprShape)
+      (args : Array ExprShape) : StateM Nat String := do
     let headKey ← exprKeyCore ctx mode depth head
     let mut parts := #[]
     for arg in args do
       parts := parts.push (← exprKeyCore ctx mode depth arg)
     pure s!"(app {headKey} [{String.intercalate "," parts.toList}])"
 
-private def exprKey (ctx : SerializerContext) (mode : ExprMode) (expr : Expr) : String :=
+private def exprKey (ctx : SerializerContext) (mode : ExprMode) (expr : ExprShape) : String :=
   (exprKeyCore ctx mode exprDepthBudget expr).run' exprNodeBudget
 
-private def dependencies (type : Expr) (fvars : Array Expr) : Array Nat := Id.run do
-  let used := (collectFVars {} type).fvarSet
-  let mut deps := #[]
-  let mut index := 0
-  for fvar in fvars do
-    if used.contains fvar.fvarId! then
-      deps := deps.push index
-    index := index + 1
-  pure deps
-
-private def collectBinders (fvars : Array Expr) : MetaM (Array Binder) := do
-  let mut binders := #[]
-  let mut index := 0
-  for fvar in fvars do
-    let localDecl ← fvar.fvarId!.getDecl
-    binders :=
-      binders.push
-        { index := index
-          fvar := fvar
-          type := localDecl.type
-          binderInfo := localDecl.binderInfo
-          deps := dependencies localDecl.type fvars }
-    index := index + 1
-  pure binders
-
-private def bindFVar (ctx : SerializerContext) (binder : Binder) (ordinal : Nat) :
+private def bindFVar (ctx : SerializerContext) (binder : BinderShape) (ordinal : Nat) :
     SerializerContext :=
-  { ctx with fvars := ctx.fvars.insert binder.fvar.fvarId! ordinal }
+  { ctx with fvars := ctx.fvars.insert binder.fvarName ordinal }
 
 private def allDepsScheduled (scheduled : Std.HashSet Nat) (deps : Array Nat) : Bool :=
   deps.all fun dep => scheduled.contains dep
 
-private def binderSortKey (ctx : SerializerContext) (binder : Binder) : String :=
-  s!"{binderInfoKey binder.binderInfo}:{exprKey ctx .exact binder.type}"
+private def binderSortKey (ctx : SerializerContext) (binder : BinderShape) : String :=
+  s!"{binderInfoKey binder.info}:{exprKey ctx .exact binder.type}"
 
 private partial def scheduleBinders
     (baseCtx : SerializerContext)
-    (binders : Array Binder) : Array Binder := Id.run do
+    (binders : Array BinderShape) : Array BinderShape := Id.run do
   let mut result := #[]
   let mut scheduled : Std.HashSet Nat := {}
   let mut ctx := baseCtx
@@ -247,7 +200,7 @@ private partial def scheduleBinders
         return result
   pure result
 
-private def bindersContext (baseCtx : SerializerContext) (binders : Array Binder) :
+private def bindersContext (baseCtx : SerializerContext) (binders : Array BinderShape) :
     SerializerContext := Id.run do
   let mut ctx := baseCtx
   let mut ordinal := 0
@@ -258,48 +211,35 @@ private def bindersContext (baseCtx : SerializerContext) (binders : Array Binder
 
 private def statementBody
     (baseCtx : SerializerContext)
-    (binders : Array Binder)
-    (conclusion : Expr)
+    (binders : Array BinderShape)
+    (conclusion : ExprShape)
     (mode : ExprMode) : String := Id.run do
   let mut ctx := baseCtx
   let mut ordinal := 0
   let mut binderKeys := #[]
   for binder in binders do
     let domainKey := exprKey ctx mode binder.type
-    binderKeys := binderKeys.push s!"({binderInfoKey binder.binderInfo} {domainKey})"
+    binderKeys := binderKeys.push s!"({binderInfoKey binder.info} {domainKey})"
     ctx := bindFVar ctx binder ordinal
     ordinal := ordinal + 1
   pure s!"(forall [{String.intercalate "," binderKeys.toList}] {exprKey ctx mode conclusion})"
 
-def computeFromTelescopeWithLevels
-    (levelParams : List Name)
-    (fvars : Array Expr)
-    (conclusion : Expr) : MetaM Fingerprints := do
-  let baseCtx : SerializerContext :=
-    { levels := levelContext levelParams
-      fvars := {} }
-  let binders ← collectBinders fvars
+/-- Compute the opaque fingerprints for a translated statement. Pure: the
+    statement has already been lowered to owned shapes by `LeanCompat`. -/
+def computeFromStatement (statement : StatementShape) : Fingerprints := Id.run do
+  let baseCtx : SerializerContext := { fvars := {} }
+  let binders := statement.binders
   let scheduled := scheduleBinders baseCtx binders
   let conclusionCtx := bindersContext baseCtx binders
-  let statement := statementBody baseCtx binders conclusion .exact
-  let safeBinderPermutation := statementBody baseCtx scheduled conclusion .exact
-  let connectiveShape := statementBody baseCtx binders conclusion .connective
-  let conclusionShape := exprKey conclusionCtx .connective conclusion
+  let statementKey := statementBody baseCtx binders statement.conclusion .exact
+  let safeBinderPermutation := statementBody baseCtx scheduled statement.conclusion .exact
+  let connectiveShape := statementBody baseCtx binders statement.conclusion .connective
+  let conclusionShape := exprKey conclusionCtx .connective statement.conclusion
   pure
-    { statement := fingerprintKey "statement" statement
+    { statement := fingerprintKey "statement" statementKey
       safeBinderPermutation := fingerprintKey "safe_binder_permutation" safeBinderPermutation
       connectiveShape := fingerprintKey "connective_shape" connectiveShape
       conclusionShape := fingerprintKey "conclusion_shape" conclusionShape
       binderCount := binders.size }
-
-def computeFromTelescope
-    (constInfo : ConstantInfo)
-    (fvars : Array Expr)
-    (conclusion : Expr) : MetaM Fingerprints :=
-  computeFromTelescopeWithLevels constInfo.levelParams fvars conclusion
-
-def compute (constInfo : ConstantInfo) : MetaM Fingerprints := do
-  forallTelescope constInfo.type fun fvars conclusion => do
-    computeFromTelescope constInfo fvars conclusion
 
 end LeanSemanticSearch.Canonical

@@ -1,4 +1,5 @@
 import Lean
+import LeanSemanticSearch.LeanCompat.Shape
 
 /-!
 JSON support for the standalone semantic-search commands.
@@ -10,7 +11,7 @@ computed.
 
 namespace LeanSemanticSearch.JsonSupport
 
-open Lean
+open Lean (Json)
 
 def schemaVersion : String := "lean-semantic-search.capability.v1"
 
@@ -49,6 +50,14 @@ def proofGoalUnavailable (message : String) (details : Option Json := none) : Er
 
 def internalError (message : String) (details : Option Json := none) : Error :=
   { kind := .internalError, message, details }
+
+/-- Map a boundary error reported by `LeanCompat` onto the envelope error type.
+    The categories correspond one-to-one. -/
+def Error.ofCompat : LeanSemanticSearch.LeanCompat.CompatError → Error
+  | .invalidRequest message details? => { kind := .invalidRequest, message, details := details? }
+  | .importFailed message details? => { kind := .importFailed, message, details := details? }
+  | .proofGoalUnavailable message details? => { kind := .proofGoalUnavailable, message, details := details? }
+  | .internalError message details? => { kind := .internalError, message, details := details? }
 
 def optionalField (json : Json) (key : String) : Option Json :=
   match json.getObjVal? key with

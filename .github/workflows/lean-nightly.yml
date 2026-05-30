@@ -1,0 +1,37 @@
+name: Lean nightly
+
+# Early-warning guard: build and test the Lean package against leanprover/lean4
+# nightly so an upstream API change is caught days/weeks before the next manual
+# toolchain bump. This never gates main — it is scheduled and non-blocking, and
+# it does not touch the pinned lean/lean-toolchain (the nightly toolchain is
+# forced for this run via ELAN_TOOLCHAIN).
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lean-nightly:
+    name: lean build + test (lean4 nightly)
+    runs-on: ubuntu-latest
+    # An upstream nightly break is signal, not a failure of this repo.
+    continue-on-error: true
+    env:
+      ELAN_TOOLCHAIN: leanprover/lean4:nightly
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install elan
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Install lean4 nightly
+        run: elan toolchain install leanprover/lean4:nightly
+      - name: lake build
+        run: lake -d lean build
+      - name: lake test
+        run: lake -d lean test

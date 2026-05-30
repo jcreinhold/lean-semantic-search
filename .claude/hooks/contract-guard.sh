@@ -31,11 +31,14 @@
 #      the advertised commands in the contract doc. Rename/add/remove one
 #      and all three must move together.
 #
-# To avoid false positives, the version check matches the version *value*
-# literals (e.g. "canonical.expr.v3"), not bare *_VERSION identifier
-# references. Importing or using a version constant by name therefore does
-# not trip the hook; only writing a version value does. It stays a plain
-# grep (advisory only) — an AST-aware check is the wrong altitude for a hook.
+# To avoid false positives, the hook fires only when an edit actually *changes*
+# the set of contract tokens (version value literals, or export/command names),
+# not merely because the edited file *contains* one. The signal is a diff of the
+# matched tokens between the committed (HEAD) and working-tree copies of the
+# file: adding an import next to `def version` leaves that set unchanged and is
+# silent; editing `v3`→`v4` changes it and fires. It stays a plain grep over
+# `git show` (advisory only) — an AST-aware check is the wrong altitude for a
+# hook. When git is unavailable it degrades to the old presence grep.
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -49,6 +52,32 @@ case "$file" in
 *) exit 0 ;;
 esac
 
+# Fire iff the *set* of tokens matching $1 differs between the committed (HEAD)
+# and working-tree copies of $2 — i.e. this change added, removed, or altered
+# one. Editing a file that merely contains an unchanged token is silent. With no
+# git checkout available, falls back to a presence grep (the old behavior). A
+# new/untracked file treats its whole token set as introduced.
+tokens_changed() {
+	local re="$1" path="$2" toplevel rel work head
+	if ! command -v git >/dev/null 2>&1; then
+		grep -Eq "$re" "$path"
+		return
+	fi
+	toplevel="$(git -C "$(dirname "$path")" rev-parse --show-toplevel 2>/dev/null || true)"
+	if [ -z "$toplevel" ]; then
+		grep -Eq "$re" "$path"
+		return
+	fi
+	rel="${path#"$toplevel"/}"
+	work="$(grep -Eo "$re" "$path" 2>/dev/null | sort -u || true)"
+	if git -C "$toplevel" cat-file -e "HEAD:$rel" 2>/dev/null; then
+		head="$(git -C "$toplevel" show "HEAD:$rel" 2>/dev/null | grep -Eo "$re" | sort -u || true)"
+	else
+		head=""
+	fi
+	[ "$work" != "$head" ]
+}
+
 msgs=()
 
 # 1. Version lockstep. Match the version *value* literals, not bare
@@ -57,7 +86,7 @@ msgs=()
 #    version get separate, accurate reminders.
 contract_version_re='canonical\.expr\.v[0-9]|features\.roles\.v[0-9]|features\.role_key\.v[0-9]|lean-semantic-search\.capability\.v[0-9]|(declaration|proof_goal)_features\.v[0-9]'
 retrieval_version_re='lean-semantic-search\.retrieval\.v[0-9]'
-if grep -Eq "$contract_version_re" "$file"; then
+if tokens_changed "$contract_version_re" "$file"; then
 	msgs+=("$(
 		cat <<EOF
 • You changed a contract version value in $file. These are mirrored across
@@ -73,7 +102,7 @@ if grep -Eq "$contract_version_re" "$file"; then
 EOF
 	)")
 fi
-if grep -Eq "$retrieval_version_re" "$file"; then
+if tokens_changed "$retrieval_version_re" "$file"; then
 	msgs+=("$(
 		cat <<EOF
 • You changed the retrieval policy version in $file. This one is
@@ -92,7 +121,11 @@ fi
 case "$file" in
 */lean/LeanSemanticSearch/Capability.lean | lean/LeanSemanticSearch/Capability.lean | \
 	*/crates/capability/src/lib.rs | crates/capability/src/lib.rs)
-	if grep -Eq '@\[export[[:space:]]+lean_semantic_search_|_EXPORT\b|_COMMAND\b' "$file"; then
+	# Capture whole symbols so `-Eo` can diff them: the export function names
+	# and the screaming-snake *_EXPORT / *_COMMAND constants. A bare `_EXPORT`
+	# fragment would collapse every constant to one token and miss renames.
+	export_command_re='lean_semantic_search_[a-z0-9_]+|[A-Z][A-Z0-9_]*_(EXPORT|COMMAND)'
+	if tokens_changed "$export_command_re" "$file"; then
 		msgs+=("$(
 			cat <<EOF
 • You touched a worker export/command name in $file. The five

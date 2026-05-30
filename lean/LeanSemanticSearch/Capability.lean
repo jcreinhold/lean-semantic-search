@@ -11,7 +11,7 @@ names, versions, and response payloads are owned by this package.
 
 namespace LeanSemanticSearch.Capability
 
-open Lean
+open Lean (Json)
 
 private def commandJson (name version : String) : Json :=
   Json.mkObj [("name", Json.str name), ("version", Json.str version)]

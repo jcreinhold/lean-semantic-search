@@ -1,28 +1,24 @@
-import Lean
+import LeanSemanticSearch.Hashing
 import LeanSemanticSearch.Json
+import LeanSemanticSearch.LeanCompat
 
 /-!
 Role-aware semantic facts shared by declaration and proof-goal extraction.
 
 The public interface is intentionally small: callers inside this package ask for
-role facts from an expression telescope and receive opaque keys plus low-signal
+role facts from a translated statement and receive opaque keys plus low-signal
 markers. The key encoding and broad-head list remain private here.
+
+This module is pure: heads, propositional status, and used constants are
+precomputed by `LeanCompat` into the `StatementShape`, so role assignment never
+touches a `Lean.Expr`.
 -/
 
 namespace LeanSemanticSearch.RoleFeatures
 
-open Lean
-open Lean.Meta
-
-private def hashSeed : UInt64 := 14695981039346656037
-
-private def hashPrime : UInt64 := 1099511628211
-
-private def stableHash (text : String) : String :=
-  toString <|
-    text.foldl
-      (fun acc char => (acc ^^^ char.toNat.toUInt64) * hashPrime)
-      hashSeed
+open Lean (Json Name)
+open LeanSemanticSearch.LeanCompat (StatementShape)
+open LeanSemanticSearch.Hashing (stableHash)
 
 inductive Role where
   | conclusionConst
@@ -98,34 +94,20 @@ private def broadHeadNames : Std.HashSet String :=
 private def isBroadHead (name : Name) : Bool :=
   broadHeadNames.contains name.toString
 
-private partial def appHead (expr : Expr) : Expr :=
-  match expr with
-  | .app fn _ => appHead fn
-  | .mdata _ body => appHead body
-  | other => other
-
-private def headName? (expr : Expr) : Option Name :=
-  match appHead expr with
-  | .const name _ => some name
-  | _ => none
-
-private def sortedNamesFromSet (names : NameSet) : Array Name :=
-  names.toArray.qsort fun left right => left.toString < right.toString
-
 private def addConstants
     (role : Role)
-    (expr : Expr)
+    (constants : Array Name)
     (features : Array RoleFeature) : Array RoleFeature := Id.run do
   let mut result := features
-  for name in sortedNamesFromSet expr.getUsedConstantsAsSet do
+  for name in constants do
     result := pushFeature result { role, name }
   pure result
 
 private def addHead
     (role : Role)
-    (expr : Expr)
+    (head? : Option Name)
     (features : Array RoleFeature) : Array RoleFeature :=
-  match headName? expr with
+  match head? with
   | some name => pushFeature features { role, name }
   | none => features
 
@@ -144,19 +126,20 @@ def lowSignalMarkers (features : Array RoleFeature) : Array String := Id.run do
 def markersJson (markers : Array String) : Json :=
   Json.arr (markers.map Json.str)
 
-def factsFromTelescope
-    (fvars : Array Expr)
-    (conclusion : Expr) : MetaM (Array RoleFeature × Array String) := do
+/-- Assign role features from a translated statement. The conclusion contributes
+    its constants and head; each binder contributes either hypothesis facts (when
+    its type is a proposition) or just its domain head. -/
+def factsFromStatement (statement : StatementShape) :
+    Array RoleFeature × Array String := Id.run do
   let mut features := #[]
-  features := addConstants .conclusionConst conclusion features
-  features := addHead .conclusionHead conclusion features
-  for fvar in fvars do
-    let localDecl ← fvar.fvarId!.getDecl
-    if ← Meta.isProp localDecl.type then
-      features := addConstants .hypothesisConst localDecl.type features
-      features := addHead .hypothesisHead localDecl.type features
+  features := addConstants .conclusionConst statement.conclusionConsts features
+  features := addHead .conclusionHead statement.conclusionHead? features
+  for binder in statement.binders do
+    if binder.isProp then
+      features := addConstants .hypothesisConst binder.usedConsts features
+      features := addHead .hypothesisHead binder.headConst? features
     else
-      features := addHead .binderDomainHead localDecl.type features
+      features := addHead .binderDomainHead binder.headConst? features
   pure (sortedFeatures features, lowSignalMarkers features)
 
 end LeanSemanticSearch.RoleFeatures

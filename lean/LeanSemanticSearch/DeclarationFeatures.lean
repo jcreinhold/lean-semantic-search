@@ -5,20 +5,21 @@ import LeanSemanticSearch.RoleFeatures
 /-!
 Declaration semantic feature rows.
 
-This module combines canonical fingerprints with role features for imported
-declarations. It owns row contents but not module import mechanics or command
-envelopes.
+This module combines canonical fingerprints with role features for extracted
+declarations. It owns row contents but not import mechanics or command
+envelopes. It is pure: the heavy `MetaM` work happened behind `LeanCompat`, so a
+row is built from an owned `DeclSource`.
 -/
 
 namespace LeanSemanticSearch.DeclarationFeatures
 
-open Lean
-open Lean.Meta
+open Lean (Json)
+open LeanSemanticSearch.LeanCompat (DeclSource)
 
 private def selectDeclarations
     (ids? : Option (Array String))
-    (declarations : Array ModuleExtraction.AcceptedDeclaration) :
-    Except JsonSupport.Error (Array ModuleExtraction.AcceptedDeclaration) := do
+    (declarations : Array DeclSource) :
+    Except JsonSupport.Error (Array DeclSource) := do
   match ids? with
   | none => pure declarations
   | some ids =>
@@ -35,48 +36,33 @@ private def selectDeclarations
             (some <| Json.mkObj [("declaration_ids", JsonSupport.stringArrayJson missing)])
       pure selected
 
-def fingerprintsJson (fingerprints : Canonical.Fingerprints) : Json :=
-  Json.mkObj
-    [ ("statement", Json.str fingerprints.statement)
-    , ("safe_binder_permutation", Json.str fingerprints.safeBinderPermutation)
-    , ("connective_shape", Json.str fingerprints.connectiveShape)
-    , ("conclusion_shape", Json.str fingerprints.conclusionShape)
-    ]
-
 def rowPayload
-    (options : ModuleExtraction.Options)
-    (declaration : ModuleExtraction.AcceptedDeclaration)
+    (declaration : DeclSource)
     (fingerprints : Canonical.Fingerprints)
     (roleFeatures : Array RoleFeatures.RoleFeature)
     (markers : Array String) : Json :=
-  let source? :=
-    ModuleExtraction.sourceSpanJson? options declaration.moduleSpec declaration.range?
+  let source? := ModuleExtraction.sourceSpanJson? declaration.range?
   Json.mkObj
     [ ("declaration_id", Json.str declaration.declarationId)
     , ("feature_version", Json.str JsonSupport.semanticFeatureVersion)
-    , ("fingerprints", fingerprintsJson fingerprints)
+    , ("fingerprints", fingerprints.toJson)
     , ("role_features", RoleFeatures.featuresJson roleFeatures)
     , ("binder_count", Json.num fingerprints.binderCount)
     , ("low_signal_markers", RoleFeatures.markersJson markers)
     , ("source", source?.getD Json.null)
     ]
 
-private def semanticFacts
-    (declaration : ModuleExtraction.AcceptedDeclaration) :
-    MetaM (Canonical.Fingerprints × Array RoleFeatures.RoleFeature × Array String) := do
-  forallTelescope declaration.constInfo.type fun fvars conclusion => do
-    let fingerprints ←
-      Canonical.computeFromTelescope declaration.constInfo fvars conclusion
-    let (roleFeatures, markers) ← RoleFeatures.factsFromTelescope fvars conclusion
-    pure (fingerprints, roleFeatures, markers)
+private def semanticFacts (declaration : DeclSource) :
+    Canonical.Fingerprints × Array RoleFeatures.RoleFeature × Array String :=
+  let fingerprints := Canonical.computeFromStatement declaration.statement
+  let (roleFeatures, markers) := RoleFeatures.factsFromStatement declaration.statement
+  (fingerprints, roleFeatures, markers)
 
-def featureRows
-    (options : ModuleExtraction.Options)
-    (declarations : Array ModuleExtraction.AcceptedDeclaration) : MetaM (Array Json) := do
+def featureRows (declarations : Array DeclSource) : Array Json := Id.run do
   let mut rows := #[]
   for declaration in declarations do
-    let (fingerprints, roleFeatures, markers) ← semanticFacts declaration
-    rows := rows.push (rowPayload options declaration fingerprints roleFeatures markers)
+    let (fingerprints, roleFeatures, markers) := semanticFacts declaration
+    rows := rows.push (rowPayload declaration fingerprints roleFeatures markers)
   pure rows
 
 unsafe def runProfiled (payload : Json) (modules : Array ModuleExtraction.ModuleSpec) :
@@ -85,14 +71,11 @@ unsafe def runProfiled (payload : Json) (modules : Array ModuleExtraction.Module
   | .error err => pure <| .error err
   | .ok ids? =>
       match ←
-        ModuleExtraction.withAcceptedDeclarationsProfiled payload modules fun options declarations => do
-          match selectDeclarations ids? declarations with
-          | .error err => pure <| Except.error err
-          | .ok selected => Except.ok <$> featureRows options selected
+        ModuleExtraction.withDeclSourcesProfiled payload modules fun _options declSources =>
+          (selectDeclarations ids? declSources).map featureRows
       with
       | .error err => pure <| .error err
-      | .ok (.error err, _stats) => pure <| .error err
-      | .ok (.ok rows, stats) =>
+      | .ok (rows, stats) =>
           pure <| .ok { rows, stats := { stats with rowCount := rows.size } }
 
 unsafe def run (payload : Json) (modules : Array ModuleExtraction.ModuleSpec) :
