@@ -24,7 +24,7 @@ cargo clippy --all-targets -- -D warnings
 
 # Lean (always pass -d lean from the repo root; the package lives in lean/)
 lake -d lean build
-lake -d lean test                            # runs the `tests` exe (LeanSemanticSearchTests root)
+lake -d lean test                            # runs the `tests` exe (Main root)
 
 # Full policy pass (optional local tools)
 mdwright fmt --check README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md

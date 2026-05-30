@@ -6,7 +6,7 @@ open Lean.Meta
 
 namespace LeanSemanticSearchTest
 
-private def fail (message : String) : IO α :=
+private def fail {α : Type} (message : String) : IO α :=
   throw <| IO.userError message
 
 private def require (condition : Bool) (message : String) : IO Unit :=
@@ -37,7 +37,7 @@ private def firstRow (json : Json) : IO Json := do
   | some row => pure row
   | none => fail s!"expected at least one feature row in response: {json.compress}"
 
-private unsafe def withFixtureMeta (action : MetaM α) : IO α := do
+private unsafe def withFixtureMeta {α : Type} (action : MetaM α) : IO α := do
   Lean.enableInitializersExecution
   initSearchPath (← getBuildDir)
   let env ← importModules #[({ module := `LeanSemanticSearchTest.Fixtures } : Import)] Options.empty (loadExts := true)
