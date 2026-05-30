@@ -3,7 +3,7 @@ members = ["crates/capability", "crates/contract", "crates/retrieval"]
 resolver = "3"
 
 [workspace.package]
-authors = ["Jacob Reinhold <jcreinhold@gmail.com>"]
+authors = ["Jacob Reinhold"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -12,9 +12,7 @@ rust-version = "1.91"
 version = "0.1.0"
 
 [workspace.dependencies]
-lean-semantic-search-capability = { path = "crates/capability", version = "0.1.0" }
 lean-semantic-search-contract = { path = "crates/contract", version = "0.1.0" }
-lean-semantic-search-retrieval = { path = "crates/retrieval", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
