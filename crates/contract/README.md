@@ -12,8 +12,9 @@ shaping all belong outside this crate.
 
 ## Status
 
-Foundation-only. Public items are the DTOs and constants re-exported by `lib.rs`; real feature extraction arrives in a
-later Lean package prompt.
+The crate tracks the real Lean feature package contract. Declaration requests identify modules and optional declaration
+ids. Proof-goal requests carry source text plus a module/declaration/position selector so Lean can elaborate and extract
+from expressions rather than rendered goal text.
 
 ## Use it
 

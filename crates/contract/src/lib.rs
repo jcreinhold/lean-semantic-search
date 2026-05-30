@@ -9,17 +9,20 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Version of the shared capability envelope used by this foundation crate.
+/// Version of the shared capability envelope used by this crate.
 pub const CAPABILITY_SCHEMA_VERSION: &str = "lean-semantic-search.capability.v1";
 
-/// Version marker for foundation declaration feature command responses.
-pub const DECLARATION_FEATURE_COMMAND_VERSION: &str = "declaration_features.foundation.v1";
+/// Version marker for declaration feature command responses.
+pub const DECLARATION_FEATURE_COMMAND_VERSION: &str = "declaration_features.v1";
 
-/// Version marker for foundation proof-goal feature command responses.
-pub const PROOF_GOAL_FEATURE_COMMAND_VERSION: &str = "proof_goal_features.foundation.v1";
+/// Version marker for proof-goal feature command responses.
+pub const PROOF_GOAL_FEATURE_COMMAND_VERSION: &str = "proof_goal_features.v1";
 
-/// Version marker for the empty foundation feature algorithm.
-pub const FOUNDATION_FEATURE_VERSION: &str = "features.foundation.v1";
+/// Version marker for canonical Lean expression fingerprints.
+pub const CANONICAL_FEATURE_VERSION: &str = "canonical.expr.v3";
+
+/// Version marker for semantic role-feature rows.
+pub const SEMANTIC_FEATURE_VERSION: &str = "features.roles.v3";
 
 /// One command advertised through generic worker capability metadata.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -169,10 +172,16 @@ pub struct DeclarationFeatureRequest {
 pub struct ProofGoalFeatureRequest {
     /// Module containing the proof state.
     pub module: String,
+    /// Full Lean source text to elaborate before selecting the proof state.
+    pub source_text: String,
+    /// Optional file label used for Lean diagnostics.
+    pub file_label: Option<String>,
     /// Optional declaration name containing the proof state.
     pub declaration: Option<String>,
     /// Optional proof-state position.
     pub position: Option<SourcePosition>,
+    /// Optional namespace context for source snippets that omit their namespace wrapper.
+    pub namespace: Option<String>,
 }
 
 /// An opaque semantic equality key.
@@ -273,7 +282,7 @@ pub struct CommandResponse<Row> {
 }
 
 impl<Row> CommandResponse<Row> {
-    /// Build an empty response for foundation commands.
+    /// Build an empty response with structured diagnostics.
     #[must_use]
     pub fn empty(
         command: impl Into<String>,
@@ -347,8 +356,8 @@ mod tests {
         let report = DoctorReport {
             diagnostics: vec![Diagnostic::new(
                 DiagnosticSeverity::Pass,
-                "foundation.ok",
-                "foundation ready",
+                "features.ok",
+                "features ready",
                 Some(json!({ "check": "boundary" })),
             )],
             metadata: Some(json!({ "schema_version": "test" })),
@@ -360,7 +369,7 @@ mod tests {
         assert_eq!(first_diagnostic.get("severity").and_then(Value::as_str), Some("pass"));
         assert_eq!(
             first_diagnostic.get("code").and_then(Value::as_str),
-            Some("foundation.ok")
+            Some("features.ok")
         );
         assert_eq!(
             first_diagnostic

@@ -13,8 +13,8 @@ framing and lifecycle; this package owns command names, versions, and JSON paylo
 | `lean_semantic_search_proof_goal_features` | `String -> IO String` | Return proof-goal feature rows for a selected proof state. |
 | `lean_semantic_search_stream_declaration_features` | `String -> USize -> USize -> IO UInt8` | Optional large-batch declaration feature export. |
 
-Foundation commands return valid empty responses with a structured warning until the Lean feature package is
-implemented.
+The declaration and proof-goal commands return versioned semantic feature rows. The streaming export is reserved for
+large declaration batches; the current implementation keeps that delivery path as a success-only skeleton.
 
 ## Metadata
 
@@ -22,10 +22,14 @@ Metadata uses the generic worker shape:
 
 ```json
 {
-  "commands": [{ "name": "declaration_features", "version": "declaration_features.foundation.v1" }],
-  "capabilities": [{ "name": "semantic_features.declarations", "version": "features.foundation.v1" }],
+  "commands": [{ "name": "declaration_features", "version": "declaration_features.v1" }],
+  "capabilities": [{ "name": "semantic_features.declarations", "version": "features.roles.v3" }],
   "lean_version": "Lean 4.x",
-  "extra": { "schema_version": "lean-semantic-search.capability.v1", "foundation_only": true }
+  "extra": {
+    "schema_version": "lean-semantic-search.capability.v1",
+    "canonical_version": "canonical.expr.v3",
+    "feature_version": "features.roles.v3"
+  }
 }
 ```
 
@@ -45,9 +49,34 @@ Doctor reports use structured diagnostics:
 }
 ```
 
-The foundation doctor reports a passing boundary check and a warning that real feature extraction arrives later.
+The doctor reports a passing boundary check and a passing feature-availability check.
 
 ## Feature Commands
+
+Declaration requests identify imported modules and may restrict extraction to known declaration ids:
+
+```json
+{
+  "modules": [{ "module": "My.Project.Module", "origin": "workspace", "source_root": "/repo" }],
+  "declaration_ids": [],
+  "include_private": false,
+  "include_generated": false
+}
+```
+
+Proof-goal requests are source-backed. Lean elaborates the supplied source, selects a tactic proof state, and extracts
+features from the selected goal's expressions and local declarations:
+
+```json
+{
+  "module": "My.Project.Module",
+  "source_text": "import My.Project.Module\n\ntheorem t : True := by\n  trivial",
+  "file_label": "My/Project/Module.lean",
+  "declaration": "t",
+  "position": { "line": 4, "column": 3 },
+  "namespace": null
+}
+```
 
 Declaration and proof-goal feature responses use the same envelope:
 
@@ -55,28 +84,31 @@ Declaration and proof-goal feature responses use the same envelope:
 {
   "schema_version": "lean-semantic-search.capability.v1",
   "command": "declaration_features",
-  "command_version": "declaration_features.foundation.v1",
-  "feature_version": "features.foundation.v1",
+  "command_version": "declaration_features.v1",
+  "feature_version": "features.roles.v3",
   "rows": [],
   "diagnostics": []
 }
 ```
 
-Future rows may include declaration or goal identifiers, opaque fingerprints, role features, low-signal markers, and
-bounded source spans. They must not include raw expressions, feature-key encodings, storage records, downstream report
-fields, or transport response types.
+Declaration rows include declaration ids, opaque fingerprints, role features, binder counts, low-signal markers, and
+bounded source spans when Lean can recover ranges. Proof-goal rows include goal ids, opaque fingerprints, role features,
+and low-signal markers. Rows must not include raw expressions, feature-key encodings, storage records, downstream report
+fields, rendered goals, or transport response types.
 
 ## Streaming
 
 The streaming export exists for large declaration batches. Its payload schema is the same semantic row schema as the
-non-streaming declaration feature command, but delivery mechanics remain owned by `lean-rs-worker`. The foundation
+non-streaming declaration feature command, but delivery mechanics remain owned by `lean-rs-worker`. The current
 implementation emits no payload entries and returns success.
 
 ## Versioning
 
 - `lean-semantic-search.capability.v1`: capability metadata, doctor, and command envelope version.
-- `features.foundation.v1`: placeholder semantic algorithm version.
-- `declaration_features.foundation.v1`: declaration feature command schema version.
-- `proof_goal_features.foundation.v1`: proof-goal feature command schema version.
+- `canonical.expr.v3`: canonical expression fingerprint algorithm version.
+- `features.role_key.v1`: private role-feature key algorithm version.
+- `features.roles.v3`: semantic feature-row algorithm version.
+- `declaration_features.v1`: declaration feature command schema version.
+- `proof_goal_features.v1`: proof-goal feature command schema version.
 
-Later prompts may add real feature versions without changing the export names.
+Later prompts may add retrieval-specific versions without changing these export names.

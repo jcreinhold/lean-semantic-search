@@ -1,10 +1,16 @@
 import LeanSemanticSearch.Capability
+import LeanSemanticSearch.Canonical
+import LeanSemanticSearch.DeclarationFeatures
+import LeanSemanticSearch.GoalElaboration
+import LeanSemanticSearch.GoalFeatures
+import LeanSemanticSearch.Json
+import LeanSemanticSearch.ModuleExtraction
+import LeanSemanticSearch.RoleFeatures
 
 /-!
 Root module for the Lean semantic search package.
 
-The foundation package exports capability metadata, doctor diagnostics, and
-empty feature-command responses. Real declaration and proof-goal feature
-extraction is added in the next prompt without changing the export boundary.
+The package exports capability metadata, doctor diagnostics, declaration
+features, proof-goal features, and the optional streaming declaration-feature
+entry point.
 -/
-

@@ -1,39 +1,42 @@
 # lean-semantic-search
 
-Shared semantic-search foundation for Lean tooling.
+Shared semantic-search package for Lean tooling.
 
 This repository defines the boundary where reusable Lean semantic facts live. It is shared by `lean-dup` duplicate
-search and `lean-host-mcp` proof-agent search, while keeping their workflow and presentation policies out of the shared
-package.
+search and `lean-host-mcp` proof-agent search, while keeping downstream workflow and presentation policies out of the
+shared package.
 
-The current state is foundation-only: Rust DTOs, capability command identity, Lean export skeletons, architecture notes,
-and checks. Real feature extraction, retrieval, ranking, storage, and downstream shaping arrive later.
+The current state includes real Lean-side semantic feature extraction for declarations and source-backed proof goals,
+plus Rust DTOs, capability command identity, architecture notes, and checks. Retrieval, ranking, storage, and downstream
+shaping arrive later.
 
 ## Repository Map
 
 | Path | Purpose |
 | --- | --- |
 | `crates/contract` | Stable serde DTOs, opaque keys, diagnostics, version constants, and response envelopes. |
-| `crates/capability` | Worker-facing command names, export names, advertised facts, and foundation responses. |
-| `lean/` | Lean package under `LeanSemanticSearch`, exporting the generic capability commands. |
+| `crates/capability` | Worker-facing command names, export names, advertised facts, and empty diagnostic helpers. |
+| `lean/` | Lean package under `LeanSemanticSearch`, exporting declaration and proof-goal feature commands. |
 | `docs/architecture` | Boundary notes and the capability contract. |
 
 Start with [docs/architecture/00-boundary.md](docs/architecture/00-boundary.md) when deciding where a new concern
 belongs. Use [docs/architecture/01-capability-contract.md](docs/architecture/01-capability-contract.md) when changing
-export names, request shapes, response envelopes, or streaming behavior.
+export names, request shapes, response envelopes, or streaming behavior. Use
+[docs/architecture/02-lean-features.md](docs/architecture/02-lean-features.md) when changing Lean-side feature
+semantics.
 
 ## Boundary Summary
 
 | Repository | Owns |
 | --- | --- |
 | `lean-rs` | Lean FFI, worker lifecycle, generic JSON and streaming capability transport, runtime facts. |
-| `lean-semantic-search` | Lean semantic feature extraction, opaque feature DTOs, shared candidate evidence, retrieval logic. |
-| `lean-dup` | Duplicate-review workflow, labels, baselines, reports, replacement guidance, production audit policy. |
-| `lean-host-mcp` | MCP tools, proof-agent response shaping, project runtime policy, fallback behavior. |
+| `lean-semantic-search` | Lean semantic feature extraction, opaque feature DTOs, shared candidate evidence, future retrieval logic. |
+| `lean-dup` | Duplicate-search workflow and presentation policy. |
+| `lean-host-mcp` | Proof-agent response shaping and project runtime policy. |
 
 The intended downstream callers are `lean-dup` duplicate search and `lean-host-mcp` proof-agent search. The shared
-crates do not expose raw Lean expressions, feature-key encodings, storage layout, duplicate-review policy, MCP response
-types, or project actor internals.
+crates do not expose raw Lean expressions, feature-key encodings, storage layout, downstream presentation policy,
+transport-specific response types, or project runtime internals.
 
 ## Requirements
 
@@ -47,8 +50,9 @@ types, or project actor internals.
 ```sh
 cargo fmt --all --check
 cargo test
-cargo clippy --all-targets -- -D warnings
 lake -d lean build
+lake -d lean test
+cargo clippy --all-targets -- -D warnings
 mdwright fmt --check README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md
 taplo fmt --check
 cargo deny check

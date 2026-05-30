@@ -6,9 +6,9 @@
 //! `retrieval` crate once there is real functionality to hide.
 
 use lean_semantic_search_contract::{
-    CAPABILITY_SCHEMA_VERSION, CapabilityFact, CapabilityMetadata, CommandMetadata, CommandResponse,
-    DECLARATION_FEATURE_COMMAND_VERSION, DeclarationFeatureRow, Diagnostic, DiagnosticSeverity,
-    FOUNDATION_FEATURE_VERSION, PROOF_GOAL_FEATURE_COMMAND_VERSION, ProofGoalFeatureRow, StreamSummary,
+    CANONICAL_FEATURE_VERSION, CAPABILITY_SCHEMA_VERSION, CapabilityFact, CapabilityMetadata, CommandMetadata,
+    CommandResponse, DECLARATION_FEATURE_COMMAND_VERSION, DeclarationFeatureRow, Diagnostic, DiagnosticSeverity,
+    PROOF_GOAL_FEATURE_COMMAND_VERSION, ProofGoalFeatureRow, SEMANTIC_FEATURE_VERSION, StreamSummary,
 };
 use serde_json::json;
 
@@ -42,8 +42,6 @@ pub const PROOF_GOAL_FEATURES_EXPORT: &str = "lean_semantic_search_proof_goal_fe
 /// Lean export for optional streaming declaration feature extraction.
 pub const STREAM_DECLARATION_FEATURES_EXPORT: &str = "lean_semantic_search_stream_declaration_features";
 
-const FOUNDATION_WARNING_CODE: &str = "lean_semantic_search.foundation.not_implemented";
-
 /// Export names implemented by the Lean package.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExportNames {
@@ -68,7 +66,7 @@ pub const EXPORTS: ExportNames = ExportNames {
     stream_declaration_features: STREAM_DECLARATION_FEATURES_EXPORT,
 };
 
-/// Command metadata advertised by the foundation capability.
+/// Command metadata advertised by the capability.
 #[must_use]
 pub fn command_metadata() -> Vec<CommandMetadata> {
     vec![
@@ -80,14 +78,14 @@ pub fn command_metadata() -> Vec<CommandMetadata> {
     ]
 }
 
-/// Capability metadata for the foundation package.
+/// Capability metadata for the package.
 #[must_use]
-pub fn foundation_metadata(lean_version: Option<String>) -> CapabilityMetadata {
+pub fn capability_metadata(lean_version: Option<String>) -> CapabilityMetadata {
     CapabilityMetadata {
         commands: command_metadata(),
         capabilities: vec![
-            CapabilityFact::new("semantic_features.declarations", FOUNDATION_FEATURE_VERSION),
-            CapabilityFact::new("semantic_features.proof_goals", FOUNDATION_FEATURE_VERSION),
+            CapabilityFact::new("semantic_features.declarations", SEMANTIC_FEATURE_VERSION),
+            CapabilityFact::new("semantic_features.proof_goals", SEMANTIC_FEATURE_VERSION),
             CapabilityFact::new("rows.json.streaming", CAPABILITY_SCHEMA_VERSION),
             CapabilityFact::new("diagnostics.structured", CAPABILITY_SCHEMA_VERSION),
         ],
@@ -95,14 +93,15 @@ pub fn foundation_metadata(lean_version: Option<String>) -> CapabilityMetadata {
         extra: Some(json!({
             "schema_version": CAPABILITY_SCHEMA_VERSION,
             "package": "lean-semantic-search",
-            "foundation_only": true
+            "canonical_version": CANONICAL_FEATURE_VERSION,
+            "feature_version": SEMANTIC_FEATURE_VERSION
         })),
     }
 }
 
-/// Doctor report for the foundation package.
+/// Doctor report for the package.
 #[must_use]
-pub fn foundation_doctor() -> lean_semantic_search_contract::DoctorReport {
+pub fn doctor_report() -> lean_semantic_search_contract::DoctorReport {
     lean_semantic_search_contract::DoctorReport {
         diagnostics: vec![
             Diagnostic::new(
@@ -112,70 +111,65 @@ pub fn foundation_doctor() -> lean_semantic_search_contract::DoctorReport {
                 Some(json!({ "package": "lean-semantic-search" })),
             ),
             Diagnostic::new(
-                DiagnosticSeverity::Warning,
-                FOUNDATION_WARNING_CODE,
-                "feature extraction is a foundation placeholder until the Lean feature package is implemented",
-                Some(json!({ "next_prompt": "02-lean-feature-package-extraction" })),
+                DiagnosticSeverity::Pass,
+                "lean_semantic_search.features.ready",
+                "semantic feature extraction is available",
+                Some(json!({
+                    "canonical_version": CANONICAL_FEATURE_VERSION,
+                    "feature_version": SEMANTIC_FEATURE_VERSION
+                })),
             ),
         ],
         metadata: Some(json!({
             "schema_version": CAPABILITY_SCHEMA_VERSION,
-            "foundation_only": true
+            "canonical_version": CANONICAL_FEATURE_VERSION,
+            "feature_version": SEMANTIC_FEATURE_VERSION
         })),
     }
 }
 
-/// Empty declaration-feature response used before real Lean extraction exists.
+/// Empty declaration-feature response with caller-supplied diagnostics.
 #[must_use]
-pub fn declaration_feature_foundation_response() -> CommandResponse<DeclarationFeatureRow> {
+pub fn declaration_feature_empty_response(diagnostics: Vec<Diagnostic>) -> CommandResponse<DeclarationFeatureRow> {
     CommandResponse::empty(
         DECLARATION_FEATURES_COMMAND,
         DECLARATION_FEATURE_COMMAND_VERSION,
-        FOUNDATION_FEATURE_VERSION,
-        vec![foundation_warning(DECLARATION_FEATURES_COMMAND)],
+        SEMANTIC_FEATURE_VERSION,
+        diagnostics,
     )
 }
 
-/// Empty proof-goal-feature response used before real Lean extraction exists.
+/// Empty proof-goal-feature response with caller-supplied diagnostics.
 #[must_use]
-pub fn proof_goal_feature_foundation_response() -> CommandResponse<ProofGoalFeatureRow> {
+pub fn proof_goal_feature_empty_response(diagnostics: Vec<Diagnostic>) -> CommandResponse<ProofGoalFeatureRow> {
     CommandResponse::empty(
         PROOF_GOAL_FEATURES_COMMAND,
         PROOF_GOAL_FEATURE_COMMAND_VERSION,
-        FOUNDATION_FEATURE_VERSION,
-        vec![foundation_warning(PROOF_GOAL_FEATURES_COMMAND)],
+        SEMANTIC_FEATURE_VERSION,
+        diagnostics,
     )
 }
 
 /// Empty terminal metadata for the optional streaming declaration-feature export.
 #[must_use]
-pub fn stream_declaration_feature_foundation_summary() -> StreamSummary {
+pub fn stream_declaration_feature_summary(diagnostics: Vec<Diagnostic>) -> StreamSummary {
     StreamSummary {
         schema_version: CAPABILITY_SCHEMA_VERSION.to_owned(),
         command: STREAM_DECLARATION_FEATURES_COMMAND.to_owned(),
         command_version: DECLARATION_FEATURE_COMMAND_VERSION.to_owned(),
-        feature_version: FOUNDATION_FEATURE_VERSION.to_owned(),
+        feature_version: SEMANTIC_FEATURE_VERSION.to_owned(),
         rows: 0,
-        diagnostics: vec![foundation_warning(STREAM_DECLARATION_FEATURES_COMMAND)],
+        diagnostics,
     }
-}
-
-fn foundation_warning(command: &str) -> Diagnostic {
-    Diagnostic::new(
-        DiagnosticSeverity::Warning,
-        FOUNDATION_WARNING_CODE,
-        "semantic feature extraction is not implemented in the foundation package",
-        Some(json!({ "command": command, "foundation_only": true })),
-    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         DECLARATION_FEATURES_COMMAND, DECLARATION_FEATURES_EXPORT, DOCTOR_EXPORT, EXPORTS, METADATA_EXPORT,
-        PROOF_GOAL_FEATURES_COMMAND, PROOF_GOAL_FEATURES_EXPORT, STREAM_DECLARATION_FEATURES_EXPORT, command_metadata,
-        declaration_feature_foundation_response, foundation_doctor, foundation_metadata,
-        proof_goal_feature_foundation_response,
+        PROOF_GOAL_FEATURES_COMMAND, PROOF_GOAL_FEATURES_EXPORT, STREAM_DECLARATION_FEATURES_EXPORT,
+        capability_metadata, command_metadata, declaration_feature_empty_response, doctor_report,
+        proof_goal_feature_empty_response,
     };
 
     #[test]
@@ -193,7 +187,7 @@ mod tests {
 
     #[test]
     fn metadata_contains_versioned_capability_facts() {
-        let metadata = foundation_metadata(Some("lean-4".to_owned()));
+        let metadata = capability_metadata(Some("lean-4".to_owned()));
         let command_names = metadata
             .commands
             .iter()
@@ -208,14 +202,14 @@ mod tests {
             metadata
                 .capabilities
                 .iter()
-                .any(|fact| fact.name == "semantic_features.declarations")
+                .any(|fact| fact.name == "semantic_features.declarations" && fact.version == "features.roles.v3")
         );
     }
 
     #[test]
     fn command_constants_are_advertised_by_metadata() {
         let worker_commands = command_metadata();
-        let metadata = foundation_metadata(None);
+        let metadata = capability_metadata(None);
 
         assert!(
             worker_commands
@@ -235,8 +229,8 @@ mod tests {
     }
 
     #[test]
-    fn doctor_contains_pass_and_foundation_warning() {
-        let report = foundation_doctor();
+    fn doctor_contains_boundary_and_feature_passes() {
+        let report = doctor_report();
         assert!(
             report
                 .diagnostics
@@ -247,16 +241,16 @@ mod tests {
             report
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.code.ends_with(".not_implemented"))
+                .any(|diagnostic| diagnostic.code == "lean_semantic_search.features.ready")
         );
     }
 
     #[test]
-    fn foundation_responses_do_not_contain_downstream_policy_vocabulary() -> Result<(), serde_json::Error> {
+    fn capability_payloads_do_not_contain_downstream_policy_vocabulary() -> Result<(), serde_json::Error> {
         let payloads = [
-            serde_json::to_string(&declaration_feature_foundation_response())?,
-            serde_json::to_string(&proof_goal_feature_foundation_response())?,
-            serde_json::to_string(&foundation_metadata(None))?,
+            serde_json::to_string(&declaration_feature_empty_response(Vec::new()))?,
+            serde_json::to_string(&proof_goal_feature_empty_response(Vec::new()))?,
+            serde_json::to_string(&capability_metadata(None))?,
         ];
 
         for payload in payloads {
@@ -274,7 +268,7 @@ mod tests {
             ] {
                 assert!(
                     !payload.to_ascii_lowercase().contains(forbidden),
-                    "foundation payload leaked forbidden vocabulary `{forbidden}`: {payload}"
+                    "capability payload leaked forbidden vocabulary `{forbidden}`: {payload}"
                 );
             }
         }

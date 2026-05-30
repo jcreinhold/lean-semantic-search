@@ -1,18 +1,19 @@
 # lean-semantic-search-capability
 
-Worker-facing command identity and foundation responses for Lean semantic search.
+Worker-facing command identity for Lean semantic search.
 
 This crate owns the names and advertised versions of the generic worker commands implemented by the Lean package:
 metadata, doctor diagnostics, declaration features, proof-goal features, and the optional streaming declaration-feature
-export. It also builds the empty foundation responses returned before real Lean feature extraction exists.
+export. It also builds empty diagnostic response helpers for hosts that need to surface command failures in the shared
+envelope shape.
 
 The capability crate deliberately does not rank candidates, choose retrieval policy, shape downstream tool responses, or
 know anything about storage. Its job is command identity over the generic `lean-rs-worker` transport.
 
 ## Status
 
-Foundation-only. The command names and export names are stable for later prompts, while feature rows remain empty until
-the Lean extractor is implemented.
+The Lean extractor is implemented in the `lean/` package. This crate remains intentionally small: it advertises command
+names, export names, versions, and structured metadata for hosts that load the capability.
 
 ## Use it
 
@@ -30,6 +31,7 @@ use lean_semantic_search_capability::EXPORTS;
 - Project README: ../../README.md
 - Boundary note: ../../docs/architecture/00-boundary.md
 - Capability contract: ../../docs/architecture/01-capability-contract.md
+- Lean feature boundary: ../../docs/architecture/02-lean-features.md
 - DTO contract crate: ../contract/README.md
 
 ## License

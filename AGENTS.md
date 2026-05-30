@@ -5,9 +5,9 @@ This repository is the shared semantic-search package for `lean-dup` and `lean-h
 ## Boundary
 
 - Do not add search semantics to `lean-rs`; use its generic worker capability transport.
-- Do not put duplicate-review policy in shared crates: no labels, baselines, review groups, replacement guidance, report
-  visibility policy, vector experiments, or production audit gates.
-- Do not put MCP, HTTP, stdio, or project actor types in shared search crates.
+- Do not put downstream workflow policy in shared crates: no review-state fields, report presentation policy, experiment
+  knobs, or production gates.
+- Do not put transport-specific or project-runtime types in shared search crates.
 - Do not expose raw Lean expressions, feature-key encodings, worker framing records, storage layout, or cache paths in
   public APIs or docs.
 - Keep feature keys opaque. Callers may store and compare keys only under matching version fields.

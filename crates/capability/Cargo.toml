@@ -1,6 +1,6 @@
 [package]
 authors = { workspace = true }
-description = "Worker-facing command identity and foundation responses for Lean semantic search."
+description = "Worker-facing command identity for Lean semantic search."
 edition = { workspace = true }
 license = { workspace = true }
 name = "lean-semantic-search-capability"
