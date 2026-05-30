@@ -17,8 +17,9 @@ Retrieval, ranking, storage, and downstream shaping belong to the callers, not h
 | `crates/contract` | Stable serde DTOs, opaque keys, diagnostics, version constants, and response envelopes. |
 | `crates/capability` | Worker-facing command names, export names, advertised facts, and empty diagnostic helpers. |
 | `crates/retrieval` | Storage-neutral semantic candidate generation: ranking, fanout limits, and bounded top-k over feature rows. |
+| `crates/store` | Persistent SQLite-backed `Corpus`: unified postings, streaming order-agnostic build, atomic publish, query-bounded resident set. |
 | `lean/` | Lean package under `LeanSemanticSearch`, exporting declaration and proof-goal feature commands. |
-| `docs/architecture` | Boundary notes, the capability contract, and the retrieval boundary. |
+| `docs/architecture` | Boundary notes, the capability contract, the retrieval boundary, and the persistence seam. |
 
 Start with [docs/architecture/00-boundary.md](docs/architecture/00-boundary.md) when deciding where a new concern
 belongs. Use [docs/architecture/01-capability-contract.md](docs/architecture/01-capability-contract.md) when changing

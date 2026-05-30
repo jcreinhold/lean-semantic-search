@@ -1,0 +1,29 @@
+[package]
+authors = { workspace = true }
+description = "Persistent SQLite-backed semantic index implementing the retrieval Corpus seam."
+edition = { workspace = true }
+license = { workspace = true }
+name = "lean-semantic-search-store"
+readme = "README.md"
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+lean-semantic-search-contract = { workspace = true }
+lean-semantic-search-retrieval = { workspace = true }
+rusqlite = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+dhat = { workspace = true }
+lean-semantic-search-contract = { workspace = true }
+lean-semantic-search-retrieval = { workspace = true }
+rusqlite = { workspace = true }
+serde_json = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
