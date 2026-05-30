@@ -70,6 +70,8 @@ private def doctorPayload : Json :=
           ] )
     ]
 
+-- The worker ABI hands every command a request string. Metadata and doctor
+-- take no input, so they ignore it and return their static payload.
 @[export lean_semantic_search_metadata]
 def metadata (_requestJson : String) : IO String :=
   pure metadataPayload.compress
@@ -144,6 +146,9 @@ unsafe def proofGoalFeatures (requestJson : String) : IO String := do
               rows
               #[]).compress
 
+-- Streaming entry point. The request, sink handle, and trampoline are part of
+-- the worker streaming ABI; this implementation emits no rows and reports
+-- success (0).
 @[export lean_semantic_search_stream_declaration_features]
 def streamDeclarationFeatures (_requestJson : String) (_handle _trampoline : USize) : IO UInt8 :=
   pure 0

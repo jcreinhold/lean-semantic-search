@@ -10,7 +10,7 @@ semantic facts live, consumed by two downstream callers it does not contain: `le
 
 The repo is a dual Lean + Rust workspace: the **Lean package** does semantic feature extraction; the **Rust crates**
 define the stable JSON contract and command identity that cross repository boundaries. There is no retrieval, ranking,
-or storage yet — those arrive later and must not be added speculatively.
+or storage yet—those arrive later and must not be added speculatively.
 
 ## Commands
 
@@ -33,7 +33,7 @@ cargo deny check
 ```
 
 Toolchain is pinned: Rust stable with `rust-version = "1.91"`, edition 2024; a Lean 4 toolchain visible to `lake`.
-`.cargo/config.toml` sets `LEAN_RS_NUM_THREADS=1` and `RUST_LOG=warn` for every cargo invocation — that is the single
+`.cargo/config.toml` sets `LEAN_RS_NUM_THREADS=1` and `RUST_LOG=warn` for every cargo invocation—that is the single
 source of truth for test env vars (do not duplicate them in nextest config). Lean import paths can take seconds on a
 cold process; the nextest `slow-timeout` warns rather than killing until ~4 minutes.
 
@@ -45,23 +45,23 @@ around it.
 The whole design is about **what each layer is forbidden to know**. Read `docs/architecture/00-boundary.md` before
 deciding where a new concern belongs, and `docs/architecture/01-capability-contract.md` before touching export names,
 request shapes, response envelopes, or versions. Each crate/module is organized around a *hidden decision*, not around
-importance — create a new Rust crate only when it hides something (e.g. retrieval becomes a crate when candidate-search
+importance—create a new Rust crate only when it hides something (e.g. retrieval becomes a crate when candidate-search
 internals exist, never as an empty placeholder).
 
 **Lean package (`lean/LeanSemanticSearch/`)** owns extraction; the split follows information ownership, not algorithm steps:
-- `Canonical` — expression traversal, universe normalization, binder scheduling, fingerprint keys (`canonical.expr.v3`).
-- `RoleFeatures` — role assignment, broad-head/low-signal marking, private role-key encoding.
-- `ModuleExtraction` — search-path setup, import, declaration/private/generated filtering, source-range lookup.
-- `DeclarationFeatures` — combines accepted declarations with fingerprints + role features.
-- `GoalFeatures` / `GoalElaboration` — same semantic facts from an open proof goal; elaboration + goal selection live
+- `Canonical`: expression traversal, universe normalization, binder scheduling, fingerprint keys (`canonical.expr.v3`).
+- `RoleFeatures`: role assignment, broad-head/low-signal marking, private role-key encoding.
+- `ModuleExtraction`: search-path setup, import, declaration/private/generated filtering, source-range lookup.
+- `DeclarationFeatures`: combines accepted declarations with fingerprints + role features.
+- `GoalFeatures` / `GoalElaboration`: same semantic facts from an open proof goal; elaboration + goal selection live
   together because they share source maps, info trees, and metavariable contexts.
-- `Json` — command envelopes, version strings, request parsing, structured diagnostics.
-- `Capability` — the five `@[export]` entry points (the worker ABI).
+- `Json`: command envelopes, version strings, request parsing, structured diagnostics.
+- `Capability`: the five `@[export]` entry points (the worker ABI).
 
 **Rust crates (`crates/`)**:
-- `contract` — stable serde DTOs, opaque keys, diagnostics, version constants, response envelopes. The cross-repository
+- `contract`: stable serde DTOs, opaque keys, diagnostics, version constants, response envelopes. The cross-repository
   JSON contract.
-- `capability` — worker-facing command names, export names, advertised facts, empty-diagnostic helpers. Intentionally
+- `capability`: worker-facing command names, export names, advertised facts, empty-diagnostic helpers. Intentionally
   small: command identity over generic transport.
 
 **The Lean exports and Rust constants must stay in lockstep.** The five `@[export lean_semantic_search_*]` functions in
@@ -71,7 +71,7 @@ shape, or version in one side requires updating the other and the contract doc.
 
 ## Invariants that are not in the code
 
-These come from `AGENTS.md` and the architecture docs — they constrain changes more than the compiler does:
+These come from `AGENTS.md` and the architecture docs—they constrain changes more than the compiler does:
 
 - **Feature keys are opaque equality tokens.** Fingerprint strings currently carry a `canonical.expr.v3` prefix, but
   callers (and any DTO docs) must treat the whole string as opaque and comparable only under matching version fields.
@@ -82,12 +82,12 @@ These come from `AGENTS.md` and the architecture docs — they constrain changes
   feature rows `features.roles.v3`, declaration command `declaration_features.v1`, proof-goal command
   `proof_goal_features.v1`.
 - **Command failures stay inside the envelope** as structured diagnostics (rows `[]` + an error diagnostic) rather than
-  failing the transport — malformed JSON, bad selectors, import failures, and unavailable proof states all return this
+  failing the transport—malformed JSON, bad selectors, import failures, and unavailable proof states all return this
   way.
 - **No downstream policy leaks in.** No review-state, report presentation, experiment knobs, production gates,
   transport-specific types, or project-runtime types belong in the shared crates.
 - **Prefer concrete private modules over traits** until two real implementations exist.
-- **Proof-goal features are source-backed**, computed from elaborated Lean expressions — never from pretty-printed goal
+- **Proof-goal features are source-backed**, computed from elaborated Lean expressions—never from pretty-printed goal
   text.
 
 ## Rust lint posture

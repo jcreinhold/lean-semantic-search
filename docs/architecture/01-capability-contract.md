@@ -14,7 +14,7 @@ framing and lifecycle; this package owns command names, versions, and JSON paylo
 | `lean_semantic_search_stream_declaration_features` | `String -> USize -> USize -> IO UInt8` | Optional large-batch declaration feature export. |
 
 The declaration and proof-goal commands return versioned semantic feature rows. The streaming export is reserved for
-large declaration batches; the current implementation keeps that delivery path as a success-only skeleton.
+large declaration batches; the current implementation returns success and emits no rows.
 
 ## Metadata
 
@@ -104,11 +104,13 @@ implementation emits no payload entries and returns success.
 
 ## Versioning
 
-- `lean-semantic-search.capability.v1`: capability metadata, doctor, and command envelope version.
-- `canonical.expr.v3`: canonical expression fingerprint algorithm version.
-- `features.role_key.v1`: private role-feature key algorithm version.
-- `features.roles.v3`: semantic feature-row algorithm version.
-- `declaration_features.v1`: declaration feature command schema version.
-- `proof_goal_features.v1`: proof-goal feature command schema version.
+| Version | Covers |
+| --- | --- |
+| `lean-semantic-search.capability.v1` | Capability metadata, doctor, and command envelope. |
+| `canonical.expr.v3` | Canonical expression fingerprint algorithm. |
+| `features.role_key.v1` | Private role-feature key algorithm. |
+| `features.roles.v3` | Semantic feature-row algorithm. |
+| `declaration_features.v1` | Declaration feature command schema. |
+| `proof_goal_features.v1` | Proof-goal feature command schema. |
 
-Later prompts may add retrieval-specific versions without changing these export names.
+Retrieval-specific versions can be added later without changing these export names.

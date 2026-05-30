@@ -7,13 +7,10 @@ metadata, doctor diagnostics, declaration features, proof-goal features, and the
 export. It also builds empty diagnostic response helpers for hosts that need to surface command failures in the shared
 envelope shape.
 
-The capability crate deliberately does not rank candidates, choose retrieval policy, shape downstream tool responses, or
-know anything about storage. Its job is command identity over the generic `lean-rs-worker` transport.
-
-## Status
-
-The Lean extractor is implemented in the `lean/` package. This crate remains intentionally small: it advertises command
-names, export names, versions, and structured metadata for hosts that load the capability.
+This crate deliberately does not rank candidates, choose retrieval policy, shape downstream tool responses, or know
+anything about storage. Its job is command identity over the generic `lean-rs-worker` transport: it advertises the
+command names, export names, versions, and structured metadata that hosts need to load the capability the `lean/`
+package implements.
 
 ## Use it
 

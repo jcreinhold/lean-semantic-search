@@ -78,6 +78,9 @@ private def rangeContains (span : SourceSpan) (line column : Nat) : Bool :=
   else
     true
 
+-- Order spans by size so the tightest enclosing range wins. Line difference
+-- dominates; the large multiplier keeps any column difference from outranking
+-- it (no source line is a million columns wide).
 private def rangeArea (span : SourceSpan) : Nat :=
   let lineSpan := span.endLine - span.startLine
   let colSpan := span.endColumn - span.startColumn
@@ -89,6 +92,8 @@ private def shortName : String → String
       | head :: _ => head
       | [] => text
 
+-- Accept either the fully-qualified name or its final component, so a caller can
+-- name a declaration as `t` or `My.Project.t` and still match.
 private def parentDeclMatches (wanted : String) (actual? : Option Name) : Bool :=
   match actual? with
   | none => false
@@ -187,6 +192,8 @@ private def countNewlines (s : String) : Nat :=
 private def messageDiagnosticsJson (messages : MessageLog) : IO Json := do
   let mut out := #[]
   for message in messages.toArray do
+    -- Cap the diagnostics carried in the envelope; a failing elaboration can
+    -- produce many messages, and the first few suffice to explain the failure.
     if out.size >= 8 then
       break
     let text ← message.data.toString

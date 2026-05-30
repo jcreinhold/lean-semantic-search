@@ -3,9 +3,10 @@ import Lean
 /-!
 Canonical expression fingerprints for semantic search.
 
-The keys emitted here are opaque equality tokens. Traversal order, binder
-scheduling, universe encoding, and the private key format are implementation
-details owned by this module.
+The keys emitted here are opaque equality tokens: callers compare them but must
+never interpret their bytes. Traversal order, binder scheduling, universe
+encoding, and the key format stay private so they can change without breaking
+callers.
 -/
 
 namespace LeanSemanticSearch.Canonical

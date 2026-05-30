@@ -5,8 +5,9 @@ import LeanSemanticSearch.Json
 /-!
 Module import and declaration selection for semantic feature commands.
 
-This module hides Lean environment traversal and declaration filtering. It does
-not emit semantic rows and does not know downstream retrieval policy.
+This module hides Lean environment traversal and declaration filtering. It
+selects which declarations to extract; building semantic rows from them is left
+to `DeclarationFeatures`, and retrieval policy stays downstream entirely.
 -/
 
 namespace LeanSemanticSearch.ModuleExtraction

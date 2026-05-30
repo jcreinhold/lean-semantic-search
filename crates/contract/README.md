@@ -7,14 +7,12 @@ metadata, doctor diagnostics, module and proof-goal requests, feature rows, opaq
 streaming summaries, and version constants. Callers may serialize, store, and compare these values according to their
 version fields, but they must not interpret opaque feature keys.
 
+Declaration requests identify modules and optional declaration ids. Proof-goal requests carry source text plus a
+module/declaration/position selector, so Lean elaborates and extracts from expressions rather than from rendered goal
+text.
+
 Expression traversal, key encoding, ranking policy, storage layout, duplicate-review workflow, and proof-agent response
 shaping all belong outside this crate.
-
-## Status
-
-The crate tracks the real Lean feature package contract. Declaration requests identify modules and optional declaration
-ids. Proof-goal requests carry source text plus a module/declaration/position selector so Lean can elaborate and extract
-from expressions rather than rendered goal text.
 
 ## Use it
 

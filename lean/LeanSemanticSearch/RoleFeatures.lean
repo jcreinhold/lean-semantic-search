@@ -75,6 +75,9 @@ def sortedFeatures (features : Array RoleFeature) : Array RoleFeature :=
 def featuresJson (features : Array RoleFeature) : Json :=
   Json.arr (sortedFeatures features |>.map RoleFeature.toJson)
 
+-- Heads that appear in a large fraction of statements (equality, the logical
+-- connectives, basic order and membership). They barely narrow a search, so
+-- features built on them are marked low-signal.
 private def broadHeadNames : Std.HashSet String :=
   [ "Eq"
   , "Iff"

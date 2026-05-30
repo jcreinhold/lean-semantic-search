@@ -254,6 +254,9 @@ mod tests {
         ];
 
         for payload in payloads {
+            // These name downstream retrieval, storage, and transport policy
+            // (duplicate-review workflow, vector stores, MCP/HTTP, the actor
+            // runtime). None of it may surface in the boundary contract.
             for forbidden in [
                 "duplicate-audit",
                 "replacement_hint",

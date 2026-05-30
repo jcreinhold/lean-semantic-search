@@ -12,13 +12,15 @@ Search semantics live here because they change for different reasons than worker
 proof-agent response shaping. A standalone package lets `lean-dup` and `lean-host-mcp` share semantic facts without
 forcing either downstream caller to inherit the other caller's policy vocabulary.
 
-## Design It Twice
+## Alternatives considered
 
-| Design | Result |
-| --- | --- |
-| Put semantic search in `lean-rs`. | Rejected. It would make the worker substrate depend on feature algorithms and search policy, increasing the public surface of every worker user. |
-| Let `lean-host-mcp` depend directly on `lean-dup-search`. | Rejected. It would leak downstream workflow policy into proof-agent search. |
-| Create standalone `lean-semantic-search`. | Chosen. It hides semantic feature decisions behind shared DTOs and lets each downstream caller keep its own presentation and workflow policy. |
+A standalone package hides semantic feature decisions behind shared DTOs and lets each downstream caller keep its own
+presentation and workflow policy. Two alternatives were rejected:
+
+- **Put semantic search in `lean-rs`.** Makes the worker substrate depend on feature algorithms and search policy,
+  enlarging the public surface every worker user inherits.
+- **Let `lean-host-mcp` depend directly on `lean-dup-search`.** Leaks duplicate-search workflow policy into proof-agent
+  search.
 
 ## Hidden Knowledge
 
@@ -26,8 +28,10 @@ forcing either downstream caller to inherit the other caller's policy vocabulary
 | --- | --- |
 | Lean package | Expression traversal, binder scheduling, proof-goal extraction, role-feature assignment, broad-head marking, semantic algorithm versions. |
 | Rust contract crate | Stable cross-repository JSON shapes, schema versions, opaque equality-key wrappers, diagnostic vocabulary. |
-| Rust retrieval crate | Storage-neutral candidate generation, ranking weights, fanout and top-k limits, saturation diagnostics. Created when retrieval exists, not as an empty crate. |
 | Rust capability crate | Export names, typed command identity, request/response serde boundaries over generic worker transport. |
+
+A crate exists only to hide something. Retrieval—storage-neutral candidate generation, ranking weights, fanout and top-k
+limits, saturation diagnostics—becomes its own crate once that behavior exists, not before.
 
 ## What Must Not Leak
 
@@ -44,4 +48,4 @@ The concrete downstream callers are:
 - `lean-dup` duplicate search, which owns its workflow and reports;
 - `lean-host-mcp` proof-agent search, which owns tool responses and fallback behavior.
 
-This package does not migrate either caller. It creates the boundary that later prompts can build on.
+This package does not migrate either caller. It defines the boundary; retrieval and the downstream callers build on it.

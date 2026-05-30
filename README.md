@@ -6,9 +6,9 @@ This repository defines the boundary where reusable Lean semantic facts live. It
 search and `lean-host-mcp` proof-agent search, while keeping downstream workflow and presentation policies out of the
 shared package.
 
-The current state includes real Lean-side semantic feature extraction for declarations and source-backed proof goals,
-plus Rust DTOs, capability command identity, architecture notes, and checks. Retrieval, ranking, storage, and downstream
-shaping arrive later.
+The package provides Lean-side semantic feature extraction for declarations and source-backed proof goals, the Rust DTOs
+that carry those facts across repository boundaries, and the command identity for the worker that serves them.
+Retrieval, ranking, storage, and downstream shaping belong to the callers, not here.
 
 ## Repository Map
 
