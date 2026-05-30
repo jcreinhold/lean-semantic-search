@@ -16,21 +16,23 @@ Retrieval, ranking, storage, and downstream shaping belong to the callers, not h
 | --- | --- |
 | `crates/contract` | Stable serde DTOs, opaque keys, diagnostics, version constants, and response envelopes. |
 | `crates/capability` | Worker-facing command names, export names, advertised facts, and empty diagnostic helpers. |
+| `crates/retrieval` | Storage-neutral semantic candidate generation: ranking, fanout limits, and bounded top-k over feature rows. |
 | `lean/` | Lean package under `LeanSemanticSearch`, exporting declaration and proof-goal feature commands. |
-| `docs/architecture` | Boundary notes and the capability contract. |
+| `docs/architecture` | Boundary notes, the capability contract, and the retrieval boundary. |
 
 Start with [docs/architecture/00-boundary.md](docs/architecture/00-boundary.md) when deciding where a new concern
 belongs. Use [docs/architecture/01-capability-contract.md](docs/architecture/01-capability-contract.md) when changing
 export names, request shapes, response envelopes, or streaming behavior. Use
 [docs/architecture/02-lean-features.md](docs/architecture/02-lean-features.md) when changing Lean-side feature
-semantics.
+semantics, and [docs/architecture/03-retrieval.md](docs/architecture/03-retrieval.md) when changing ranking, fanout, or
+top-k policy.
 
 ## Boundary Summary
 
 | Repository | Owns |
 | --- | --- |
 | `lean-rs` | Lean FFI, worker lifecycle, generic JSON and streaming capability transport, runtime facts. |
-| `lean-semantic-search` | Lean semantic feature extraction, opaque feature DTOs, shared candidate evidence, future retrieval logic. |
+| `lean-semantic-search` | Lean semantic feature extraction, opaque feature DTOs, and storage-neutral retrieval logic. |
 | `lean-dup` | Duplicate-search workflow and presentation policy. |
 | `lean-host-mcp` | Proof-agent response shaping and project runtime policy. |
 

@@ -14,7 +14,10 @@ This repository is the shared semantic-search package for `lean-dup` and `lean-h
 - Prefer concrete private modules over traits until two real implementations exist.
 - Public DTOs must carry schema or algorithm version fields when they cross repository boundaries.
 - Create Rust crates around a hidden decision, not around importance. `contract` owns schema compatibility; `capability`
-  owns worker-facing command identity; retrieval should become a crate only when it hides candidate-search internals.
+  owns worker-facing command identity; `retrieval` owns candidate-search internals (ranking weights, rarity weighting,
+  fanout limits, broad-head pruning, bounded top-k). Keep ranking, fanout, and top-k policy private to `retrieval`;
+  callers see only ranks, feature-family explanations, and diagnostics. Do not add storage, persistence, or downstream
+  ranking policy to it, and do not expose raw feature keys or composite scores.
 
 ## Writing
 

@@ -25,6 +25,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lean-semantic-search-retrieval"
+version = "0.1.0"
+dependencies = [
+ "lean-semantic-search-contract",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

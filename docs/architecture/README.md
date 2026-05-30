@@ -7,6 +7,8 @@ Start here when deciding where a new semantic-search concern belongs.
   streaming export.
 - [Lean features](02-lean-features.md): Lean-side module boundaries for canonicalization, role features, module
   extraction, and proof-goal extraction.
+- [Retrieval](03-retrieval.md): storage-neutral semantic candidate generation — ranking, fanout limits, broad-head
+  pruning, and bounded top-k over feature rows.
 
-Retrieval, ranking, and storage-neutral candidate search should each land only when there is enough behavior to hide
-behind a clear owner.
+Storage, persistence, and downstream ranking policy should each land only when there is enough behavior to hide behind a
+clear owner.

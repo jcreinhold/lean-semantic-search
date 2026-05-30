@@ -1,0 +1,25 @@
+[package]
+authors = { workspace = true }
+description = "Storage-neutral semantic candidate generation over Lean feature rows."
+edition = { workspace = true }
+license = { workspace = true }
+name = "lean-semantic-search-retrieval"
+readme = "README.md"
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+lean-semantic-search-contract = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+lean-semantic-search-contract = { workspace = true }
+serde_json = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
