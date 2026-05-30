@@ -10,5 +10,43 @@
   },
   "enabledPlugins": {
     "lean-rs-skills@lean-rs-skills": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(cargo fmt:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo nextest run:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo metadata:*)",
+      "Bash(cargo tree:*)",
+      "Bash(cargo deny check:*)",
+      "Bash(lake -d lean build:*)",
+      "Bash(lake -d lean test:*)",
+      "Bash(taplo fmt --check:*)",
+      "Bash(mdwright fmt --check:*)",
+      "Bash(actionlint:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/contract-guard.sh"
+          }
+        ]
+      }
+    ]
   }
 }
