@@ -58,10 +58,31 @@ msgs=()
 contract_version_re='canonical\.expr\.v[0-9]|features\.roles\.v[0-9]|features\.role_key\.v[0-9]|lean-semantic-search\.capability\.v[0-9]|(declaration|proof_goal)_features\.v[0-9]'
 retrieval_version_re='lean-semantic-search\.retrieval\.v[0-9]'
 if grep -Eq "$contract_version_re" "$file"; then
-	msgs+=("• You changed a contract version value in $file. These are mirrored across the Lean↔Rust boundary and have no cross-language test. Move all three together: the constants in crates/contract/src/lib.rs (CAPABILITY_SCHEMA_VERSION / DECLARATION_FEATURE_COMMAND_VERSION / PROOF_GOAL_FEATURE_COMMAND_VERSION / CANONICAL_FEATURE_VERSION / SEMANTIC_FEATURE_VERSION), the defs in lean/LeanSemanticSearch/Json.lean (schemaVersion / declarationFeatureCommandVersion / proofGoalFeatureCommandVersion / semanticFeatureVersion / roleKeyVersion), and docs/architecture/01-capability-contract.md.")
+	msgs+=("$(cat <<EOF
+• You changed a contract version value in $file. These are mirrored across
+  the Lean↔Rust boundary and have no cross-language test, so move all three
+  together:
+    - crates/contract/src/lib.rs constants: CAPABILITY_SCHEMA_VERSION,
+      DECLARATION_FEATURE_COMMAND_VERSION, PROOF_GOAL_FEATURE_COMMAND_VERSION,
+      CANONICAL_FEATURE_VERSION, SEMANTIC_FEATURE_VERSION
+    - lean/LeanSemanticSearch/Json.lean defs: schemaVersion,
+      declarationFeatureCommandVersion, proofGoalFeatureCommandVersion,
+      semanticFeatureVersion, roleKeyVersion
+    - docs/architecture/01-capability-contract.md
+EOF
+	)")
 fi
 if grep -Eq "$retrieval_version_re" "$file"; then
-	msgs+=("• You changed the retrieval policy version in $file. This one is retrieval-only by design (it versions a ranking decision, not a Lean fact): do NOT mirror it in lean/LeanSemanticSearch/Json.lean or docs/architecture/01-capability-contract.md. Keep crates/retrieval/src/policy.rs (POLICY_VERSION) and the RETRIEVAL_POLICY_VERSION re-export in sync, and reflect the bump in CHANGELOG.md and docs/architecture/04-persistence.md.")
+	msgs+=("$(cat <<EOF
+• You changed the retrieval policy version in $file. This one is
+  retrieval-only by design — it versions a ranking decision, not a Lean fact
+  — so do NOT mirror it in Json.lean or the capability contract doc. Keep
+  these in sync instead:
+    - crates/retrieval/src/policy.rs (POLICY_VERSION) and the
+      RETRIEVAL_POLICY_VERSION re-export
+    - CHANGELOG.md and docs/architecture/04-persistence.md
+EOF
+	)")
 fi
 
 # 2. Export/command lockstep. Only the two files that own the worker ABI,
@@ -70,7 +91,15 @@ case "$file" in
 */lean/LeanSemanticSearch/Capability.lean | lean/LeanSemanticSearch/Capability.lean | \
 	*/crates/capability/src/lib.rs | crates/capability/src/lib.rs)
 	if grep -Eq '@\[export[[:space:]]+lean_semantic_search_|_EXPORT\b|_COMMAND\b' "$file"; then
-		msgs+=("• You touched a worker export/command name in $file. The five @[export lean_semantic_search_*] functions in Capability.lean correspond one-to-one to the *_EXPORT / *_COMMAND constants in crates/capability/src/lib.rs and the advertised commands in docs/architecture/01-capability-contract.md. Change all three together (renaming, adding, or removing an entry).")
+		msgs+=("$(cat <<EOF
+• You touched a worker export/command name in $file. The five
+  @[export lean_semantic_search_*] functions in Capability.lean map
+  one-to-one to the *_EXPORT / *_COMMAND constants in
+  crates/capability/src/lib.rs and the advertised commands in
+  docs/architecture/01-capability-contract.md. Rename, add, or remove an
+  entry in all three together.
+EOF
+	)")
 	fi
 	;;
 esac
