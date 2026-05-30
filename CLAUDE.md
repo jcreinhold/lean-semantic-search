@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repository is
 
-`lean-semantic-search` is the **shared semantic-search package** for Lean tooling. It is the boundary where reusable Lean
-semantic facts live, consumed by two downstream callers it does not contain: `lean-dup` (duplicate search) and
+`lean-semantic-search` is the **shared semantic-search package** for Lean tooling. It is the boundary where reusable
+Lean semantic facts live, consumed by two downstream callers it does not contain: `lean-dup` (duplicate search) and
 `lean-host-mcp` (proof-agent search). It depends on `lean-rs`/`lean-rs-worker` only as a generic transport substrate.
 
 The repo is a dual Lean + Rust workspace: the **Lean package** does semantic feature extraction; the **Rust crates**
@@ -48,7 +48,8 @@ request shapes, response envelopes, or versions. Each crate/module is organized 
 importance—create a new Rust crate only when it hides something (e.g. retrieval becomes a crate when candidate-search
 internals exist, never as an empty placeholder).
 
-**Lean package (`lean/LeanSemanticSearch/`)** owns extraction; the split follows information ownership, not algorithm steps:
+**Lean package (`lean/LeanSemanticSearch/`)** owns extraction; the split follows information ownership, not algorithm
+steps:
 - `Canonical`: expression traversal, universe normalization, binder scheduling, fingerprint keys (`canonical.expr.v3`).
 - `RoleFeatures`: role assignment, broad-head/low-signal marking, private role-key encoding.
 - `ModuleExtraction`: search-path setup, import, declaration/private/generated filtering, source-range lookup.
@@ -63,11 +64,11 @@ internals exist, never as an empty placeholder).
   JSON contract.
 - `capability`: worker-facing command names, export names, advertised facts, empty-diagnostic helpers. Intentionally
   small: command identity over generic transport.
-- `retrieval`: storage-neutral semantic candidate generation over feature rows. Hides ranking weights, rarity
-  weighting, fanout/posting limits, broad-head pruning, and bounded top-k. Callers see `rank` + feature-family
-  explanations + diagnostics, never postings, heaps, composite scores, or raw keys. In-memory only—no storage,
-  persistence, or downstream ranking policy. Carries its own `RETRIEVAL_POLICY_VERSION`
-  (`lean-semantic-search.retrieval.v1`); adds no DTOs to `contract`.
+- `retrieval`: storage-neutral semantic candidate generation over feature rows. Hides ranking weights, rarity weighting,
+  fanout/posting limits, broad-head pruning, and bounded top-k. Callers see `rank` + feature-family explanations +
+  diagnostics, never postings, heaps, composite scores, or raw keys. In-memory only—no storage, persistence, or
+  downstream ranking policy. Carries its own `RETRIEVAL_POLICY_VERSION` (`lean-semantic-search.retrieval.v1`); adds no
+  DTOs to `contract`.
 
 **The Lean exports and Rust constants must stay in lockstep.** The five `@[export lean_semantic_search_*]` functions in
 `Capability.lean` correspond one-to-one to the `*_EXPORT`/`*_COMMAND` constants in `crates/capability/src/lib.rs`, and
@@ -82,10 +83,9 @@ These come from `AGENTS.md` and the architecture docs—they constrain changes m
   callers (and any DTO docs) must treat the whole string as opaque and comparable only under matching version fields.
   Never expose raw Lean expressions, feature-key encodings, worker framing, storage layout, or cache paths.
 - **Public DTOs crossing repo boundaries must carry a schema or algorithm version field.** Version strings are
-  centralized as constants in `contract` and mirrored in the Lean `Json` module. The current versions: capability
-  schema `lean-semantic-search.capability.v1`, canonical `canonical.expr.v3`, role-key `features.role_key.v1`,
-  feature rows `features.roles.v3`, declaration command `declaration_features.v1`, proof-goal command
-  `proof_goal_features.v1`.
+  centralized as constants in `contract` and mirrored in the Lean `Json` module. The current versions: capability schema
+  `lean-semantic-search.capability.v1`, canonical `canonical.expr.v3`, role-key `features.role_key.v1`, feature rows
+  `features.roles.v3`, declaration command `declaration_features.v1`, proof-goal command `proof_goal_features.v1`.
 - **Command failures stay inside the envelope** as structured diagnostics (rows `[]` + an error diagnostic) rather than
   failing the transport—malformed JSON, bad selectors, import failures, and unavailable proof states all return this
   way.
