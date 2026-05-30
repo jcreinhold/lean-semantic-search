@@ -58,7 +58,8 @@ msgs=()
 contract_version_re='canonical\.expr\.v[0-9]|features\.roles\.v[0-9]|features\.role_key\.v[0-9]|lean-semantic-search\.capability\.v[0-9]|(declaration|proof_goal)_features\.v[0-9]'
 retrieval_version_re='lean-semantic-search\.retrieval\.v[0-9]'
 if grep -Eq "$contract_version_re" "$file"; then
-	msgs+=("$(cat <<EOF
+	msgs+=("$(
+		cat <<EOF
 • You changed a contract version value in $file. These are mirrored across
   the Lean↔Rust boundary and have no cross-language test, so move all three
   together:
@@ -73,7 +74,8 @@ EOF
 	)")
 fi
 if grep -Eq "$retrieval_version_re" "$file"; then
-	msgs+=("$(cat <<EOF
+	msgs+=("$(
+		cat <<EOF
 • You changed the retrieval policy version in $file. This one is
   retrieval-only by design — it versions a ranking decision, not a Lean fact
   — so do NOT mirror it in Json.lean or the capability contract doc. Keep
@@ -91,7 +93,8 @@ case "$file" in
 */lean/LeanSemanticSearch/Capability.lean | lean/LeanSemanticSearch/Capability.lean | \
 	*/crates/capability/src/lib.rs | crates/capability/src/lib.rs)
 	if grep -Eq '@\[export[[:space:]]+lean_semantic_search_|_EXPORT\b|_COMMAND\b' "$file"; then
-		msgs+=("$(cat <<EOF
+		msgs+=("$(
+			cat <<EOF
 • You touched a worker export/command name in $file. The five
   @[export lean_semantic_search_*] functions in Capability.lean map
   one-to-one to the *_EXPORT / *_COMMAND constants in
@@ -99,7 +102,7 @@ case "$file" in
   docs/architecture/01-capability-contract.md. Rename, add, or remove an
   entry in all three together.
 EOF
-	)")
+		)")
 	fi
 	;;
 esac
