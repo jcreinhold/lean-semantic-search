@@ -15,6 +15,13 @@ must have a corresponding `## [X.Y.Z]` section here.
 - `lean-semantic-search-retrieval`: a `Corpus` trait — the storage seam a later persistent store implements — with the
   in-memory inverted index as the reference implementation, and `retrieve_across` for fanning one anchor across a slice
   of corpora into one bounded, ranked list.
+- `lean-semantic-search-store`: a persisted, on-disk `Corpus` over SQLite — a streaming, order-agnostic build with a
+  query-bounded resident set and an atomic single-file publish. `Store::open_fresh` reuses a corpus only on a matching
+  opaque `corpus_token` and matching `schema_version`/`policy_version`, reporting every mismatch or corruption as a
+  structured `CacheMiss` rather than an error; `set_latest`/`cleanup` are neutral, latest-pointer-protecting,
+  dry-run-by-default primitives over content-addressed corpus directories. The store records the versions and the opaque
+  token but never interprets the token's contents. See `docs/architecture/05-sqlite-store.md` and
+  `docs/architecture/06-cache-lifecycle.md`.
 
 ### Changed
 

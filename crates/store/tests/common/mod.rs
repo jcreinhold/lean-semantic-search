@@ -85,6 +85,17 @@ pub(crate) fn temp_path(tag: &str) -> PathBuf {
     path
 }
 
+/// A unique temp directory path for one test to use as a corpus-cache root,
+/// isolated by process id and a counter. Not created — the lifecycle primitives
+/// create it on demand.
+#[must_use]
+pub(crate) fn temp_root(tag: &str) -> PathBuf {
+    let serial = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut path = std::env::temp_dir();
+    path.push(format!("lss-store-root-{}-{tag}-{serial}", std::process::id()));
+    path
+}
+
 /// Build and publish a corpus from rows (declaration announced, then featured),
 /// then open it read-only.
 ///
