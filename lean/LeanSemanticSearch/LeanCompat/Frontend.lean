@@ -128,12 +128,14 @@ private def moduleNamesJson (modules : Array ModuleRef) : Json :=
   Json.arr (modules.map fun moduleRef => Json.str moduleRef.module)
 
 /-- Import the requested modules and enumerate accepted declarations as owned
-    `DeclSource` records. Hides the environment layout, declaration-range lookup,
-    the generated/private classification, and the `Expr`→`StatementShape`
+    `DeclSource` records. The caller must install Lean's module search path
+    before invoking this function. This function imports against the current
+    search path and never calls `initSearchPath` or rebuilds the path from
+    `LEAN_PATH`. Hides the environment layout, declaration-range lookup, the
+    generated/private classification, and the `Expr`→`StatementShape`
     translation. -/
 unsafe def collectDeclSources (req : ImportRequest) : IO (Except CompatError (Array DeclSource)) := do
   Lean.enableInitializersExecution
-  initSearchPath (← getBuildDir)
   let imports := uniqueModuleImports req.modules
   let env? ←
     try
@@ -340,7 +342,10 @@ private def messageDiagnosticsJson (messages : MessageLog) : IO Json := do
   pure <| Json.arr out
 
 /-- Elaborate the requested source, select the tactic state matching the
-    declaration/position selectors, and return an owned `GoalSnapshot`. Hides the
+    declaration/position selectors, and return an owned `GoalSnapshot`. The
+    caller must install Lean's module search path before invoking this function.
+    This function elaborates against the current search path and never calls
+    `initSearchPath` or rebuilds the path from `LEAN_PATH`. Hides the
     parser/frontend pipeline, the info-tree traversal, the metavariable context,
     and the file-map span arithmetic. -/
 unsafe def selectGoalSnapshot (req : GoalRequest) : IO (Except CompatError GoalSnapshot) := do
@@ -351,7 +356,6 @@ unsafe def selectGoalSnapshot (req : GoalRequest) : IO (Except CompatError GoalS
     return .error <| CompatError.invalidRequest "could not parse source header"
   try
     Lean.enableInitializersExecution
-    initSearchPath (← getBuildDir)
     let headerImports := Elab.headerToImports header (includeInit := true)
     let commandEnv ← importModules headerImports opts (loadExts := true)
     let initialMessages := headerMessages

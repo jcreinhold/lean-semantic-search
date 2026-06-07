@@ -39,7 +39,6 @@ private def firstRow (json : Json) : IO Json := do
 
 private unsafe def withFixtureMeta {α : Type} (action : MetaM α) : IO α := do
   Lean.enableInitializersExecution
-  initSearchPath (← getBuildDir)
   let env ← importModules #[({ module := `LeanSemanticSearchTest.Fixtures } : Import)] Options.empty (loadExts := true)
   let coreContext : Core.Context :=
     { fileName := "<lean-semantic-search-test>"
@@ -135,6 +134,50 @@ private unsafe def testDeclarationFeatures : IO Unit := do
     (!response.compress.contains "raw_expr")
     "declaration feature response must not expose raw expressions"
 
+private unsafe def compileSentinelModule (dir : System.FilePath) (moduleName : Name) : IO Unit := do
+  let stem := moduleName.toString
+  let sourcePath := (dir / stem).withExtension "lean"
+  let oleanPath := (dir / stem).withExtension "olean"
+  IO.FS.writeFile sourcePath "def sentinel : Nat := 1\n"
+  let output ←
+    IO.Process.output
+      { cmd := "lean"
+        args := #["-R", dir.toString, "-o", oleanPath.toString, sourcePath.toString] }
+  require
+    (output.exitCode == 0)
+    s!"failed to compile ambient sentinel module:\nstdout:\n{output.stdout}\nstderr:\n{output.stderr}"
+
+private unsafe def requireSentinelImport (moduleName : Name) : IO Unit := do
+  try
+    Lean.enableInitializersExecution
+    discard <| importModules #[({ module := moduleName } : Import)] Options.empty (loadExts := true)
+  catch error =>
+    fail s!"ambient sentinel module was not importable after capability export: {error}"
+
+private unsafe def withAmbientSentinel (label : String) (action : IO Unit) : IO Unit :=
+  IO.FS.withTempDir fun dir => do
+    let pid ← IO.Process.getPID
+    let moduleName := Name.mkSimple s!"LeanSemanticSearchSentinel{label}{pid}"
+    compileSentinelModule dir moduleName
+    let originalSearchPath ← searchPathRef.get
+    searchPathRef.set (dir :: originalSearchPath)
+    try
+      action
+      requireSentinelImport moduleName
+    finally
+      searchPathRef.set originalSearchPath
+
+private unsafe def testDeclarationFeaturesPreservesAmbientSearchPath : IO Unit :=
+  withAmbientSentinel "Declaration" do
+    let request :=
+      Json.mkObj
+        [ ("modules", Json.arr #[Json.mkObj [("module", Json.str "LeanSemanticSearchTest.Fixtures")]])
+        , ("include_generated", Json.bool true)
+        ]
+    let response ← parseJson (← LeanSemanticSearch.Capability.declarationFeatures request.compress)
+    let rows ← arrField response "rows"
+    require (!rows.isEmpty) "declaration feature response should contain fixture rows"
+
 private def proofGoalSource : String :=
   String.intercalate "\n"
     [ "import Init"
@@ -162,6 +205,18 @@ private unsafe def testProofGoalFeatures : IO Unit := do
     (!response.compress.contains "goalsBefore" && !response.compress.contains "raw_expr")
     "proof-goal response must not expose rendered goals or raw expressions"
 
+private unsafe def testProofGoalFeaturesPreservesAmbientSearchPath : IO Unit :=
+  withAmbientSentinel "ProofGoal" do
+    let request :=
+      Json.mkObj
+        [ ("module", Json.str "LeanSemanticSearchTest.GoalSource")
+        , ("source_text", Json.str proofGoalSource)
+        , ("declaration", Json.str "goalFeatureSource")
+        ]
+    let response ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures request.compress)
+    let rows ← arrField response "rows"
+    require (!rows.isEmpty) "proof-goal feature response should contain fixture rows"
+
 private unsafe def testDiagnostics : IO Unit := do
   let malformed ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures "{")
   let malformedDiagnostics ← arrField malformed "diagnostics"
@@ -173,12 +228,16 @@ private unsafe def testDiagnostics : IO Unit := do
   require (!missingDiagnostics.isEmpty) "missing proof-goal source should return diagnostics"
 
 unsafe def main (_args : List String) : IO UInt32 := do
+  Lean.enableInitializersExecution
+  initSearchPath (← getBuildDir)
   testCanonicalAlphaStability
   testGoldenFingerprints
   testMetadataAndDoctor
   testGeneratedFiltering
   testDeclarationFeatures
+  testDeclarationFeaturesPreservesAmbientSearchPath
   testProofGoalFeatures
+  testProofGoalFeaturesPreservesAmbientSearchPath
   testDiagnostics
   pure 0
 
