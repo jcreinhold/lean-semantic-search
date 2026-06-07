@@ -9,7 +9,7 @@ are traversed, how binders are scheduled, or how feature keys are encoded.
 | --- | --- |
 | `Canonical` | Expression traversal, universe normalization, binder scheduling, connective normalization, and fingerprint keys. |
 | `RoleFeatures` | Role assignment, broad-head marking, low-signal markers, and role-key encoding. |
-| `ModuleExtraction` | Search-path setup, module import, declaration filtering, generated/private filtering, and source-range lookup. |
+| `ModuleExtraction` | Request parsing, timing, module import through `LeanCompat.collectDeclSources`, declaration filtering, generated/private filtering, and source-range lookup. |
 | `DeclarationFeatures` | Combining accepted declarations with canonical fingerprints and role features. |
 | `GoalFeatures` | Computing the same semantic facts from an open proof goal's local context and target expression. |
 | `GoalElaboration` | Elaborating source text, walking the info tree, selecting a tactic proof state, and passing expressions to `GoalFeatures`. |
@@ -18,6 +18,9 @@ are traversed, how binders are scheduled, or how feature keys are encoded.
 The split follows information ownership, not algorithm steps. Source elaboration and proof-goal selection are together
 because they share source maps, info trees, and metavariable contexts. Feature assignment is separate because
 declaration and proof-goal extraction both use it.
+
+Search-path construction belongs to the caller that embeds the capability. Hosted exports import and elaborate against
+Lean's current module search path; they do not initialize that path or rebuild it from process environment.
 
 ## Declaration Features
 

@@ -55,8 +55,9 @@ cargo fmt --all --check
 cargo test
 lake -d lean build
 lake -d lean test
+scripts/check-runtime-vendoring.sh
 cargo clippy --all-targets -- -D warnings
-mdwright fmt --check README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md
+mdwright fmt --check README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md lean/VENDORING.md
 taplo fmt --check
 cargo deny check
 ```

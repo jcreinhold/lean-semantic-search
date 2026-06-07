@@ -45,6 +45,7 @@ crates/*/fuzz/target/
 # Lean build outputs.
 **/.lake/
 **/lake-manifest.json
+!lean/lake-manifest.json
 
 # Local semantic-search scratch data.
 **/.lean-semantic-search/

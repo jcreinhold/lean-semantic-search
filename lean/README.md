@@ -8,6 +8,10 @@ commands import requested modules and emit canonical fingerprints, role features
 where Lean can recover them. Proof-goal feature commands elaborate caller-supplied source and extract features from the
 selected tactic goal's Lean expressions and local context.
 
+Hosted callers must install Lean's module search path before invoking capability exports. The exports import and
+elaborate against the current search path; they do not call `initSearchPath` or rebuild from `LEAN_PATH`. The standalone
+test driver is the local caller that initializes a search path for `lake -d lean test`.
+
 Build and test it from the repository root with:
 
 ```sh

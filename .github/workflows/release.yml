@@ -55,6 +55,8 @@ jobs:
         run: lake -d lean build
       - name: lake test
         run: lake -d lean test
+      - name: runtime vendoring check
+        run: scripts/check-runtime-vendoring.sh
 
   publish:
     name: publish

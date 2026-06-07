@@ -3,7 +3,7 @@
 #
 # This is the local mirror of `.github/workflows/release.yml`: it runs
 # the same gates as the `verify` job (fmt, clippy, nextest, cargo-deny,
-# lake build/test) plus the `publish` job's preflight checks
+# lake build/test, runtime vendoring) plus the `publish` job's preflight checks
 # (tag/version ↔ CHANGELOG consistency and a `cargo publish --workspace
 # --dry-run`), and the docs/toml policy checks `ci.yml` runs
 # (actionlint, mdwright, taplo). Run it before tagging a `vX.Y.Z`
@@ -34,7 +34,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION_ANCHOR_CRATE="lean-semantic-search-contract"
 
 # Files the CLAUDE.md markdown policy covers (mirrors ci.yml's policy job).
-MDWRIGHT_TARGETS=(README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md)
+MDWRIGHT_TARGETS=(README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md lean/VENDORING.md)
 
 # -- logging ----------------------------------------------------------------
 
@@ -132,6 +132,9 @@ run_gate "lake -d lean build" \
 
 run_gate "lake -d lean test" \
 	lake -d lean test
+
+run_gate "scripts/check-runtime-vendoring.sh" \
+	scripts/check-runtime-vendoring.sh
 
 run_gate "cargo fmt --all --check" \
 	cargo fmt --all --check

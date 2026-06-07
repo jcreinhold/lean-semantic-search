@@ -114,6 +114,8 @@ jobs:
         run: lake -d lean build
       - name: lake test
         run: lake -d lean test
+      - name: runtime vendoring check
+        run: scripts/check-runtime-vendoring.sh
 
   policy:
     name: docs + toml policy
@@ -127,6 +129,6 @@ jobs:
       - name: Install mdwright
         run: cargo binstall -y mdwright
       - name: mdwright fmt --check
-        run: mdwright fmt --check README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md
+        run: mdwright fmt --check README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md lean/VENDORING.md
       - name: taplo fmt --check
         run: taplo fmt --check
