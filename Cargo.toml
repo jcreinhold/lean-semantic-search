@@ -9,11 +9,11 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/jcreinhold/lean-semantic-search"
 rust-version = "1.91"
-version = "0.1.0"
+version = "0.2.0"
 
 [workspace.dependencies]
-lean-semantic-search-contract = { path = "crates/contract", version = "0.1.0" }
-lean-semantic-search-retrieval = { path = "crates/retrieval", version = "0.1.0" }
+lean-semantic-search-contract = { path = "crates/contract", version = "0.2.0" }
+lean-semantic-search-retrieval = { path = "crates/retrieval", version = "0.2.0" }
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

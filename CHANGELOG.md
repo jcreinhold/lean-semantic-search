@@ -10,6 +10,8 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### Added
 
 - `lean-semantic-search-retrieval`: a `Corpus` trait — the storage seam a later persistent store implements — with the
