@@ -10,6 +10,12 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Added
+
+- `lean-semantic-search-runtime`: a package-owned runtime crate that ships the `LeanSemanticSearch` Lean capability
+  payload, materializes it in a caller-owned per-toolchain cache with a generated downstream `lean-toolchain`, records
+  provenance, builds via `CargoLeanCapability::lean_sysroot`, and returns a `LeanBuiltCapability` for downstream hosts.
+
 ## [0.2.0]
 
 ### Added

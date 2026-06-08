@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Materialize the Lean runtime payload exactly as a downstream host would vendor
-# it, then prove that package builds without tests, upstream toolchain pins, or
-# build artifacts.
+# Prove the packaged runtime crate payload matches the canonical Lean runtime
+# file set, then build that packaged payload as a downstream host would.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RUNTIME_ROOT="$REPO_ROOT/crates/runtime/runtime"
 TMPDIR_ROOT="${TMPDIR:-/tmp}"
 WORKDIR="$(mktemp -d "${TMPDIR_ROOT%/}/lean-semantic-search-runtime.XXXXXX")"
 
@@ -49,43 +49,38 @@ active_toolchain() {
 	return 1
 }
 
-copy_runtime_file() {
+compare_file() {
+	local source="$1"
+	local packaged="$2"
+	if ! cmp -s "$REPO_ROOT/$source" "$RUNTIME_ROOT/$packaged"; then
+		printf 'runtime payload differs from canonical source: %s -> %s\n' "$source" "$packaged" >&2
+		diff -u "$REPO_ROOT/$source" "$RUNTIME_ROOT/$packaged" >&2 || true
+		exit 1
+	fi
+}
+
+copy_packaged_file() {
 	local src="$1"
-	local dst
-	case "$src" in
-	lean/*)
-		dst="${src#lean/}"
-		;;
-	LICENSE-APACHE | LICENSE-MIT)
-		dst="$src"
-		;;
-	*)
-		printf 'unexpected runtime source path: %s\n' "$src" >&2
-		return 1
-		;;
-	esac
-	mkdir -p "$WORKDIR/$(dirname "$dst")"
-	cp "$REPO_ROOT/$src" "$WORKDIR/$dst"
+	mkdir -p "$WORKDIR/$(dirname "$src")"
+	cp "$RUNTIME_ROOT/$src" "$WORKDIR/$src"
 }
 
 require_cmd git
 require_cmd lake "install via elan + leanprover/lean4"
 require_cmd lean "install via elan + leanprover/lean4"
 
-cd "$REPO_ROOT"
+compare_file lean/lakefile.lean lakefile.lean
+compare_file lean/lake-manifest.json lake-manifest.json
+compare_file lean/LeanSemanticSearch.lean LeanSemanticSearch.lean
+compare_file lean/README.md README.md
+compare_file lean/VENDORING.md VENDORING.md
+compare_file LICENSE-APACHE LICENSE-APACHE
+compare_file LICENSE-MIT LICENSE-MIT
 
-git ls-files -z --cached --others --exclude-standard -- \
-	lean/lakefile.lean \
-	lean/lake-manifest.json \
-	lean/LeanSemanticSearch.lean \
-	'lean/LeanSemanticSearch/**' \
-	lean/README.md \
-	lean/VENDORING.md \
-	LICENSE-APACHE \
-	LICENSE-MIT |
-	while IFS= read -r -d '' path; do
-		copy_runtime_file "$path"
-	done
+if ! diff -ru "$REPO_ROOT/lean/LeanSemanticSearch" "$RUNTIME_ROOT/LeanSemanticSearch"; then
+	printf 'runtime LeanSemanticSearch/ payload differs from canonical source\n' >&2
+	exit 1
+fi
 
 for required in \
 	lakefile.lean \
@@ -97,35 +92,39 @@ for required in \
 	LICENSE-APACHE \
 	LICENSE-MIT
 do
-	if [[ ! -f "$WORKDIR/$required" ]]; then
+	if [[ ! -f "$RUNTIME_ROOT/$required" ]]; then
 		printf 'runtime payload is missing required path: %s\n' "$required" >&2
 		exit 1
 	fi
 done
 
-if [[ -e "$WORKDIR/lean-toolchain" ]]; then
-	printf 'runtime payload copied upstream lean/lean-toolchain instead of generating one\n' >&2
-	exit 1
-fi
-
 for excluded in \
 	.lake \
+	lean-toolchain \
 	Main.lean \
 	LeanSemanticSearchTest.lean \
 	LeanSemanticSearchTest
 do
-	if [[ -e "$WORKDIR/$excluded" ]]; then
+	if [[ -e "$RUNTIME_ROOT/$excluded" ]]; then
 		printf 'runtime payload unexpectedly contains excluded path: %s\n' "$excluded" >&2
 		exit 1
 	fi
 done
 
-if find "$WORKDIR" \( -name '*.olean' -o -name '*.ilean' -o -name '*.c' -o -name '*.so' -o -name '*.dylib' \) -print -quit |
+if find "$RUNTIME_ROOT" \( -name '*.olean' -o -name '*.ilean' -o -name '*.c' -o -name '*.so' -o -name '*.dylib' \) -print -quit |
 	grep -q .
 then
 	printf 'runtime payload unexpectedly contains build artifacts\n' >&2
 	exit 1
 fi
+
+(
+	cd "$RUNTIME_ROOT"
+	find . -type f -print0
+) |
+	while IFS= read -r -d '' path; do
+		copy_packaged_file "${path#./}"
+	done
 
 printf '%s\n' "$(active_toolchain)" >"$WORKDIR/lean-toolchain"
 

@@ -29,9 +29,14 @@ presentation and workflow policy. Two alternatives were rejected:
 | Lean package | Expression traversal, binder scheduling, proof-goal extraction, role-feature assignment, broad-head marking, semantic algorithm versions. |
 | Rust contract crate | Stable cross-repository JSON shapes, schema versions, opaque equality-key wrappers, diagnostic vocabulary. |
 | Rust capability crate | Export names, typed command identity, request/response serde boundaries over generic worker transport. |
+| Rust runtime crate | Runtime Lean file set, source digest, generated downstream toolchain rule, cache materialization, provenance sidecar, and explicit-sysroot Lake build. |
 
 A crate exists only to hide something. Retrieval—storage-neutral candidate generation, ranking weights, fanout and top-k
 limits, saturation diagnostics—becomes its own crate once that behavior exists, not before.
+
+The runtime crate hides package-owned capability distribution. Downstream hosts ask for a built
+`LeanSemanticSearch` capability for a specific toolchain/sysroot; they do not copy `lean/`, reconstruct source digests,
+or decide which Lean files ship at runtime.
 
 ## What Must Not Leak
 

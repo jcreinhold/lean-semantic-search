@@ -17,6 +17,7 @@ Retrieval, ranking, storage, and downstream shaping belong to the callers, not h
 | `crates/contract` | Stable serde DTOs, opaque keys, diagnostics, version constants, and response envelopes. |
 | `crates/capability` | Worker-facing command names, export names, advertised facts, and empty diagnostic helpers. |
 | `crates/retrieval` | Storage-neutral semantic candidate generation: ranking, fanout limits, and bounded top-k over feature rows. |
+| `crates/runtime` | Package-owned Lean runtime payload, provenance, cache materialization, and explicit-sysroot capability build. |
 | `crates/store` | Persistent SQLite-backed `Corpus`: unified postings, streaming order-agnostic build, atomic publish, query-bounded resident set. |
 | `lean/` | Lean package under `LeanSemanticSearch`, exporting declaration and proof-goal feature commands. |
 | `docs/architecture` | Boundary notes, the capability contract, the retrieval boundary, and the persistence seam. |
@@ -53,6 +54,7 @@ transport-specific response types, or project runtime internals.
 ```sh
 cargo fmt --all --check
 cargo test
+cargo test -p lean-semantic-search-runtime
 lake -d lean build
 lake -d lean test
 scripts/check-runtime-vendoring.sh
