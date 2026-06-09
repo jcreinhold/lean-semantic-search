@@ -16,7 +16,7 @@ package implements.
 
 ```toml
 [dependencies]
-lean-semantic-search-capability = "0.1"
+lean-semantic-search-capability = "0.3"
 ```
 
 ```rust

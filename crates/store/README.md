@@ -21,7 +21,7 @@ it.
 
 ```toml
 [dependencies]
-lean-semantic-search-store = "0.1"
+lean-semantic-search-store = "0.3"
 ```
 
 ```rust

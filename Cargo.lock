@@ -321,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-capability"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "lean-semantic-search-contract",
  "serde_json",
@@ -329,7 +329,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-contract"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-retrieval"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "lean-semantic-search-contract",
  "serde",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-runtime"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "fs4",
  "lean-rs-worker-protocol",
@@ -362,7 +362,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-store"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "dhat",
  "lean-semantic-search-contract",

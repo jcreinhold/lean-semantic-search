@@ -35,7 +35,7 @@ const CACHE_SCHEMA_VERSION: u32 = 1;
 pub const SOURCE_REVISION: &str = "f504ad7616de785fe5cbf6f9d41684f9bd552e23";
 /// Digest of the runtime Lean payload, using the file-set rule in
 /// `lean/VENDORING.md`.
-pub const RUNTIME_SOURCE_DIGEST: &str = "2e45b2654f892d0b1f2b20d59d4c484c02de454d93f9f4ca4a93d5de33103459";
+pub const RUNTIME_SOURCE_DIGEST: &str = "0addb0cfe50e3313273be0788ed37f599b834c0fd9da123290cfda391d2b1773";
 /// Lake package name owned by the runtime payload.
 pub const PACKAGE_NAME: &str = "lean-semantic-search";
 const MATERIALIZED_PACKAGE_NAME: &str = "lean_semantic_search";

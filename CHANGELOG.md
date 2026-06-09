@@ -10,6 +10,8 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.3.0]
+
 ### Added
 
 - `lean-semantic-search-runtime`: a package-owned runtime crate that ships the `LeanSemanticSearch` Lean capability

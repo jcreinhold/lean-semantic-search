@@ -22,7 +22,7 @@ calibration carries its own `RETRIEVAL_POLICY_VERSION`.
 
 ```toml
 [dependencies]
-lean-semantic-search-retrieval = "0.1"
+lean-semantic-search-retrieval = "0.3"
 ```
 
 ```rust
