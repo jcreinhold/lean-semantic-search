@@ -16,6 +16,12 @@ must have a corresponding `## [X.Y.Z]` section here.
   payload, materializes it in a caller-owned per-toolchain cache with a generated downstream `lean-toolchain`, records
   provenance, builds via `CargoLeanCapability::lean_sysroot`, and returns a `LeanBuiltCapability` for downstream hosts.
 
+### Changed
+
+- `lean-semantic-search-runtime` now delegates source-package materialization to the shared `lean-toolchain` helper
+  while preserving its public runtime API. Cache keys remain digest/toolchain based, provenance sidecars and generated
+  downstream `lean-toolchain` files are still recorded, and the runtime payload remains a zero-dependency Lake package.
+
 ## [0.2.0]
 
 ### Added
