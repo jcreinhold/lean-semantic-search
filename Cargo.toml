@@ -22,8 +22,8 @@ lean-semantic-search-capability = { path = "crates/capability", version = "0.2.0
 lean-semantic-search-contract = { path = "crates/contract", version = "0.2.0" }
 lean-semantic-search-retrieval = { path = "crates/retrieval", version = "0.2.0" }
 fs4 = "1.1"
-lean-rs-worker-protocol = "0.2.0"
-lean-toolchain = "0.2.0"
+lean-rs-worker-protocol = "0.2"
+lean-toolchain = "0.2"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -34,10 +34,6 @@ walkdir = "2"
 
 # Dev-only: peak-heap measurement for the store benchmark. Not distributed.
 dhat = "0.3"
-
-[patch.crates-io]
-lean-rs-abi = { path = "../lean-rs/crates/lean-rs-abi" }
-lean-toolchain = { path = "../lean-rs/crates/lean-toolchain" }
 
 [workspace.lints.rust]
 future-incompatible = "warn"
