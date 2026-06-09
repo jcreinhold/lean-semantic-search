@@ -65,6 +65,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install elan + pinned Lean toolchain
+        # `cargo publish` verifies each tarball by building it, and the runtime
+        # crate's dependency tree builds `lean-rs-abi`, whose build script runs
+        # `lean --print-prefix`. The publish runner needs the toolchain on PATH
+        # just like the verify job; elan reads it from lean/lean-toolchain.
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain "$(cat lean/lean-toolchain)"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       - name: Verify tag matches workspace version
         if: github.event_name == 'push'
         run: |
