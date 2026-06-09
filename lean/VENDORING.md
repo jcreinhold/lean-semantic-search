@@ -64,7 +64,7 @@ cd ~/Code/lean-semantic-search
 
 ## Runtime Build Measurement
 
-Recorded 2026-06-08 on macOS arm64 (`Darwin Mac 25.4.0`), Apple M4 Pro, Lean toolchain
+Recorded 2026-06-09 on macOS arm64 (`Darwin Mac 25.4.0`), Apple M4 Pro, Lean toolchain
 `leanprover/lean4:v4.31.0-rc1`. Runtime payload: 14 Lean source files (`LeanSemanticSearch.lean` plus 13 files under
 `LeanSemanticSearch/`), zero Lake packages.
 
@@ -76,4 +76,4 @@ LEAN_SEMANTIC_SEARCH_RUNTIME_TOOLCHAIN="$(cat lean/lean-toolchain)" \
   cargo test -p lean-semantic-search-runtime --test build_cached -- --ignored --nocapture
 ```
 
-Result: cold materialize + shared capability build `6023 ms`; immediate warm cache reuse + build check `17 ms`.
+Result: cold materialize + shared capability build `6378 ms`; immediate warm cache reuse + build check `6 ms`.

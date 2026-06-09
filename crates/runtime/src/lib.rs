@@ -19,8 +19,9 @@ use lean_rs_worker_protocol::worker_exports::{
     doctor_signature, json_command_signature, metadata_signature, streaming_command_signature,
 };
 use lean_toolchain::{
-    CargoLeanCapability, LeanBuiltCapability, LeanBuiltCapabilityError, LeanExportSignature, LeanLibraryDependency,
-    LinkDiagnostics,
+    CargoLeanCapability, GeneratedSourceFile, LeanBuiltCapability, LeanBuiltCapabilityError, LeanExportSignature,
+    LeanLibraryDependency, LinkDiagnostics, SourcePackageError, SourcePackageMaterializationRequest,
+    materialize_source_package as materialize_with_toolchain,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -179,6 +180,13 @@ pub enum Error {
     /// Runtime payload invariant failed.
     #[error("invalid semantic-search runtime payload: {0}")]
     InvalidRuntimePayload(String),
+    /// Shared source-package materialization failed.
+    #[error("semantic-search runtime source materialization failed: {source}")]
+    SourcePackage {
+        /// Source-package materialization error.
+        #[from]
+        source: SourcePackageError,
+    },
     /// Lake capability build failed.
     #[error("semantic-search runtime build failed for toolchain {toolchain_label}: {source}")]
     Build {
@@ -204,9 +212,11 @@ pub enum Error {
 /// Returns [`Error`] when materialization, cache validation, or the explicit
 /// sysroot Lake build fails.
 pub fn build_cached(input: SemanticSearchRuntimeBuild) -> Result<SemanticSearchRuntime, Error> {
-    let cache = RuntimeCache::new(input.cache_root);
-    let _lock = cache.lock_entry(&input.toolchain_label)?;
-    let package = cache.ensure_materialized_locked(&input.toolchain_label)?;
+    let package = materialize_source_package(SemanticSearchSourcePackageRequest {
+        cache_root: input.cache_root,
+        toolchain_label: input.toolchain_label.clone(),
+    })?;
+    let _build_lock = lock_runtime_build(&package.project_root)?;
     let mut builder = CargoLeanCapability::new(&package.project_root, LIBRARY_NAME)
         .package(MATERIALIZED_PACKAGE_NAME)
         .module(LIBRARY_NAME)
@@ -232,9 +242,14 @@ pub fn build_cached(input: SemanticSearchRuntimeBuild) -> Result<SemanticSearchR
 pub fn materialize_source_package(
     input: SemanticSearchSourcePackageRequest,
 ) -> Result<SemanticSearchSourcePackage, Error> {
-    let cache = RuntimeCache::new(input.cache_root);
-    let _lock = cache.lock_entry(&input.toolchain_label)?;
-    cache.ensure_materialized_locked(&input.toolchain_label)
+    ensure_runtime_payload_source(Path::new(RUNTIME_SOURCE_ROOT))?;
+    let provenance = SemanticSearchRuntimeProvenance::new(&input.toolchain_label);
+    let request = source_package_request(input.cache_root, &input.toolchain_label, &provenance)?;
+    let materialized = materialize_with_toolchain(&request)?;
+    Ok(SemanticSearchSourcePackage {
+        project_root: materialized.project_root,
+        provenance,
+    })
 }
 
 /// Compute the packaged runtime source digest using the `lean/VENDORING.md`
@@ -257,149 +272,87 @@ fn export_signatures() -> [LeanExportSignature; 5] {
     ]
 }
 
-struct RuntimeCache {
-    root: PathBuf,
-}
-
-impl RuntimeCache {
-    fn new(root: PathBuf) -> Self {
-        Self { root }
-    }
-
-    fn digest_root(&self) -> PathBuf {
-        self.root.join(RUNTIME_SOURCE_DIGEST)
-    }
-
-    fn entry_root(&self, toolchain_label: &str) -> PathBuf {
-        self.digest_root().join(sanitize_toolchain_label(toolchain_label))
-    }
-
-    fn lock_entry(&self, toolchain_label: &str) -> Result<EntryLock, Error> {
-        let digest_root = self.digest_root();
-        create_dir_all(&digest_root, "create semantic-search runtime cache digest directory")?;
-        let path = digest_root.join(format!("{}.lock", sanitize_toolchain_label(toolchain_label)));
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(&path)
-            .map_err(|source| Error::Io {
-                action: "open semantic-search runtime cache lock",
-                path: path.clone(),
-                source,
-            })?;
-        fs4::FileExt::lock(&file).map_err(|source| Error::Io {
-            action: "lock semantic-search runtime cache entry",
-            path,
-            source,
-        })?;
-        Ok(EntryLock { _file: file })
-    }
-
-    fn ensure_materialized_locked(&self, toolchain_label: &str) -> Result<SemanticSearchSourcePackage, Error> {
-        let root = self.entry_root(toolchain_label);
-        if let Some(provenance) = entry_matches(&root, toolchain_label)? {
-            return Ok(SemanticSearchSourcePackage {
-                project_root: root,
-                provenance,
-            });
-        }
-
-        remove_path_if_exists(&root, "remove stale semantic-search runtime cache entry")?;
-        clean_stale_temps(&self.digest_root())?;
-
-        let temp = tempfile::Builder::new()
-            .prefix(".semantic-search-runtime-")
-            .tempdir_in(self.digest_root())
-            .map_err(|source| Error::Io {
-                action: "create semantic-search runtime temp directory",
-                path: self.digest_root(),
-                source,
-            })?;
-        copy_runtime_payload(Path::new(RUNTIME_SOURCE_ROOT), temp.path())?;
-        rewrite_materialized_lake_metadata(temp.path())?;
-        write_file(
-            &temp.path().join("lean-toolchain"),
-            format!("{toolchain_label}\n").as_bytes(),
-            "write generated semantic-search runtime lean-toolchain",
-        )?;
-        let provenance = SemanticSearchRuntimeProvenance::new(toolchain_label);
-        write_sidecar(temp.path(), &provenance)?;
-
-        let temp_path = temp.keep();
-        fs::rename(&temp_path, &root).map_err(|source| {
-            drop(fs::remove_dir_all(&temp_path));
-            Error::Io {
-                action: "install semantic-search runtime cache entry",
-                path: root.clone(),
-                source,
-            }
-        })?;
-        Ok(SemanticSearchSourcePackage {
-            project_root: root,
-            provenance,
-        })
-    }
-}
-
-struct EntryLock {
+struct BuildLock {
     _file: File,
 }
 
-fn entry_matches(root: &Path, toolchain_label: &str) -> Result<Option<SemanticSearchRuntimeProvenance>, Error> {
-    if !root.is_dir() {
-        return Ok(None);
-    }
-    for relative in [
-        "lakefile.lean",
-        "lake-manifest.json",
-        "LeanSemanticSearch.lean",
-        "LeanSemanticSearch/Capability.lean",
-        "README.md",
-        "VENDORING.md",
-        "LICENSE-APACHE",
-        "LICENSE-MIT",
-        "lean-toolchain",
-        SIDECAR_FILE_NAME,
-    ] {
-        if !root.join(relative).is_file() {
-            return Ok(None);
-        }
-    }
-    let sidecar_path = root.join(SIDECAR_FILE_NAME);
-    let provenance: SemanticSearchRuntimeProvenance = serde_json::from_slice(&read_file(
-        &sidecar_path,
-        "read semantic-search runtime provenance sidecar",
-    )?)
-    .map_err(|source| Error::Json {
-        action: "decode semantic-search runtime provenance sidecar",
-        path: sidecar_path,
+fn lock_runtime_build(project_root: &Path) -> Result<BuildLock, Error> {
+    let path = project_root.join(".semantic-search-runtime-build.lock");
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&path)
+        .map_err(|source| Error::Io {
+            action: "open semantic-search runtime build lock",
+            path: path.clone(),
+            source,
+        })?;
+    fs4::FileExt::lock(&file).map_err(|source| Error::Io {
+        action: "lock semantic-search runtime build",
+        path,
         source,
     })?;
-    let expected = SemanticSearchRuntimeProvenance::new(toolchain_label);
-    if provenance != expected {
-        return Ok(None);
-    }
-    let toolchain = read_to_string(
-        &root.join("lean-toolchain"),
-        "read generated semantic-search runtime lean-toolchain",
-    )?;
-    if toolchain.trim() != toolchain_label {
-        return Ok(None);
-    }
-    ensure_zero_package_manifest(&root.join("lake-manifest.json"))?;
-    Ok(Some(provenance))
+    Ok(BuildLock { _file: file })
 }
 
-fn write_sidecar(root: &Path, provenance: &SemanticSearchRuntimeProvenance) -> Result<(), Error> {
-    let path = root.join(SIDECAR_FILE_NAME);
+fn source_package_request(
+    cache_root: PathBuf,
+    toolchain_label: &str,
+    provenance: &SemanticSearchRuntimeProvenance,
+) -> Result<SourcePackageMaterializationRequest, Error> {
+    Ok(SourcePackageMaterializationRequest {
+        source_root: PathBuf::from(RUNTIME_SOURCE_ROOT),
+        cache_root,
+        package_name: PACKAGE_NAME.to_owned(),
+        materialized_package_name: MATERIALIZED_PACKAGE_NAME.to_owned(),
+        library_name: LIBRARY_NAME.to_owned(),
+        source_digest: RUNTIME_SOURCE_DIGEST.to_owned(),
+        source_revision: SOURCE_REVISION.to_owned(),
+        crate_name: env!("CARGO_PKG_NAME").to_owned(),
+        crate_version: env!("CARGO_PKG_VERSION").to_owned(),
+        toolchain_label: toolchain_label.to_owned(),
+        include_paths: vec![PathBuf::from(".")],
+        generated_files: vec![
+            GeneratedSourceFile {
+                relative_path: PathBuf::from("lakefile.lean"),
+                contents: materialized_lakefile_bytes()?,
+            },
+            GeneratedSourceFile {
+                relative_path: PathBuf::from("lake-manifest.json"),
+                contents: materialized_manifest_bytes()?,
+            },
+            GeneratedSourceFile {
+                relative_path: PathBuf::from(SIDECAR_FILE_NAME),
+                contents: semantic_sidecar_bytes(provenance)?,
+            },
+        ],
+        sentinel_files: [
+            "lakefile.lean",
+            "lake-manifest.json",
+            "LeanSemanticSearch.lean",
+            "LeanSemanticSearch/Capability.lean",
+            "README.md",
+            "VENDORING.md",
+            "LICENSE-APACHE",
+            "LICENSE-MIT",
+            SIDECAR_FILE_NAME,
+        ]
+        .into_iter()
+        .map(PathBuf::from)
+        .collect(),
+    })
+}
+
+fn semantic_sidecar_bytes(provenance: &SemanticSearchRuntimeProvenance) -> Result<Vec<u8>, Error> {
+    let path = PathBuf::from(SIDECAR_FILE_NAME);
     let bytes = serde_json::to_vec_pretty(provenance).map_err(|source| Error::Json {
         action: "encode semantic-search runtime provenance sidecar",
-        path: path.clone(),
+        path,
         source,
     })?;
-    write_file(&path, &bytes, "write semantic-search runtime provenance sidecar")
+    Ok(bytes)
 }
 
 fn ensure_zero_package_manifest(path: &Path) -> Result<(), Error> {
@@ -425,20 +378,18 @@ fn ensure_zero_package_manifest(path: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-fn rewrite_materialized_lake_metadata(root: &Path) -> Result<(), Error> {
-    let lakefile = root.join("lakefile.lean");
+fn materialized_lakefile_bytes() -> Result<Vec<u8>, Error> {
+    let lakefile = Path::new(RUNTIME_SOURCE_ROOT).join("lakefile.lean");
     let lakefile_text = read_to_string(&lakefile, "read materialized semantic-search lakefile")?;
     let rewritten = lakefile_text.replace(
         "package «lean-semantic-search» where",
         "package lean_semantic_search where",
     );
-    write_file(
-        &lakefile,
-        rewritten.as_bytes(),
-        "write materialized semantic-search lakefile",
-    )?;
+    Ok(rewritten.into_bytes())
+}
 
-    let manifest_path = root.join("lake-manifest.json");
+fn materialized_manifest_bytes() -> Result<Vec<u8>, Error> {
+    let manifest_path = Path::new(RUNTIME_SOURCE_ROOT).join("lake-manifest.json");
     let mut manifest: serde_json::Value = serde_json::from_slice(&read_file(
         &manifest_path,
         "read materialized semantic-search manifest",
@@ -460,11 +411,11 @@ fn rewrite_materialized_lake_metadata(root: &Path) -> Result<(), Error> {
         path: manifest_path.clone(),
         source,
     })?;
-    write_file(&manifest_path, &bytes, "write materialized semantic-search manifest")?;
-    ensure_zero_package_manifest(&manifest_path)
+    ensure_zero_package_manifest(&manifest_path)?;
+    Ok(bytes)
 }
 
-fn copy_runtime_payload(source_root: &Path, dest_root: &Path) -> Result<(), Error> {
+fn ensure_runtime_payload_source(source_root: &Path) -> Result<(), Error> {
     for entry in WalkDir::new(source_root) {
         let entry = entry.map_err(|source| Error::InvalidRuntimePayload(format!("walk runtime payload: {source}")))?;
         let source_path = entry.path();
@@ -483,21 +434,8 @@ fn copy_runtime_payload(source_root: &Path, dest_root: &Path) -> Result<(), Erro
                 relative.display()
             )));
         }
-        let dest = dest_root.join(relative);
-        if entry.file_type().is_dir() {
-            create_dir_all(&dest, "create semantic-search runtime payload directory")?;
-        } else if entry.file_type().is_file() {
-            if let Some(parent) = dest.parent() {
-                create_dir_all(parent, "create semantic-search runtime payload parent")?;
-            }
-            fs::copy(source_path, &dest).map_err(|source| Error::Io {
-                action: "copy semantic-search runtime payload file",
-                path: dest,
-                source,
-            })?;
-        }
     }
-    ensure_zero_package_manifest(&dest_root.join("lake-manifest.json"))?;
+    ensure_zero_package_manifest(&source_root.join("lake-manifest.json"))?;
     Ok(())
 }
 
@@ -573,19 +511,6 @@ fn excluded_runtime_path(relative: &Path) -> bool {
             .is_some_and(|extension| matches!(extension, "olean" | "ilean" | "c" | "so" | "dylib" | "a"))
 }
 
-fn sanitize_toolchain_label(label: &str) -> String {
-    label
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_') {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect()
-}
-
 fn hex_lower(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len().saturating_mul(2));
     for byte in bytes {
@@ -603,57 +528,6 @@ fn hex_nibble(nibble: u8) -> char {
     }
 }
 
-fn clean_stale_temps(parent: &Path) -> Result<(), Error> {
-    if !parent.is_dir() {
-        return Ok(());
-    }
-    let entries = fs::read_dir(parent).map_err(|source| Error::Io {
-        action: "read semantic-search runtime cache directory",
-        path: parent.to_path_buf(),
-        source,
-    })?;
-    for entry in entries {
-        let entry = entry.map_err(|source| Error::Io {
-            action: "read semantic-search runtime cache directory entry",
-            path: parent.to_path_buf(),
-            source,
-        })?;
-        let file_name = entry.file_name();
-        let Some(name) = file_name.to_str() else {
-            continue;
-        };
-        if name.starts_with(".semantic-search-runtime-") {
-            remove_path_if_exists(&entry.path(), "remove stale semantic-search runtime temp path")?;
-        }
-    }
-    Ok(())
-}
-
-fn remove_path_if_exists(path: &Path, action: &'static str) -> Result<(), Error> {
-    if path.is_dir() {
-        fs::remove_dir_all(path).map_err(|source| Error::Io {
-            action,
-            path: path.to_path_buf(),
-            source,
-        })?;
-    } else if path.exists() {
-        fs::remove_file(path).map_err(|source| Error::Io {
-            action,
-            path: path.to_path_buf(),
-            source,
-        })?;
-    }
-    Ok(())
-}
-
-fn create_dir_all(path: &Path, action: &'static str) -> Result<(), Error> {
-    fs::create_dir_all(path).map_err(|source| Error::Io {
-        action,
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
 fn read_file(path: &Path, action: &'static str) -> Result<Vec<u8>, Error> {
     fs::read(path).map_err(|source| Error::Io {
         action,
@@ -664,14 +538,6 @@ fn read_file(path: &Path, action: &'static str) -> Result<Vec<u8>, Error> {
 
 fn read_to_string(path: &Path, action: &'static str) -> Result<String, Error> {
     fs::read_to_string(path).map_err(|source| Error::Io {
-        action,
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
-fn write_file(path: &Path, bytes: &[u8], action: &'static str) -> Result<(), Error> {
-    fs::write(path, bytes).map_err(|source| Error::Io {
         action,
         path: path.to_path_buf(),
         source,
@@ -786,6 +652,31 @@ mod tests {
         let second = materialize_source_package(request).map_err(|error| error.to_string())?;
         assert_eq!(first.project_root, second.project_root);
         assert!(marker.is_file(), "warm cache entry should not be recopied");
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_provenance_sidecar_mismatch_rematerializes_entry() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let request = SemanticSearchSourcePackageRequest {
+            cache_root: temp.path().to_path_buf(),
+            toolchain_label: "leanprover/lean4:v4.31.0-rc1".to_owned(),
+        };
+        let first = materialize_source_package(request.clone()).map_err(|error| error.to_string())?;
+        let marker = first.project_root.join("warm-marker");
+        fs::write(&marker, b"warm").map_err(|error| error.to_string())?;
+        fs::write(first.project_root.join(SIDECAR_FILE_NAME), b"{}").map_err(|error| error.to_string())?;
+
+        let second = materialize_source_package(request).map_err(|error| error.to_string())?;
+        assert_eq!(first.project_root, second.project_root);
+        assert!(
+            !marker.exists(),
+            "semantic provenance mismatch should force rematerialization"
+        );
+        let sidecar: SemanticSearchRuntimeProvenance =
+            serde_json::from_str(&read_string(&second.project_root.join(SIDECAR_FILE_NAME))?)
+                .map_err(|error| error.to_string())?;
+        assert_eq!(sidecar, second.provenance);
         Ok(())
     }
 

@@ -35,6 +35,10 @@ walkdir = "2"
 # Dev-only: peak-heap measurement for the store benchmark. Not distributed.
 dhat = "0.3"
 
+[patch.crates-io]
+lean-rs-abi = { path = "../lean-rs/crates/lean-rs-abi" }
+lean-toolchain = { path = "../lean-rs/crates/lean-toolchain" }
+
 [workspace.lints.rust]
 future-incompatible = "warn"
 let-underscore = "warn"

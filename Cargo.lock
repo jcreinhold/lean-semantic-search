@@ -302,8 +302,6 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "lean-rs-abi"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e7e16902d527780be22f5c77b269f1be0cdbefc78bb80974abd2501f00ff712"
 dependencies = [
  "sha2",
 ]
@@ -374,10 +372,10 @@ dependencies = [
 [[package]]
 name = "lean-toolchain"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e67bd882b999d5cf4045c8a1331cd71f7e68fb3c5c5a0f2e4779167e40f439d3"
 dependencies = [
+ "fs4",
  "lean-rs-abi",
+ "serde",
  "serde_json",
  "sha2",
  "toml",
