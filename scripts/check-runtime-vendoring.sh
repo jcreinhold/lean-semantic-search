@@ -66,6 +66,7 @@ copy_packaged_file() {
 }
 
 require_cmd git
+require_cmd cargo
 require_cmd lake "install via elan + leanprover/lean4"
 require_cmd lean "install via elan + leanprover/lean4"
 
@@ -117,6 +118,23 @@ then
 	printf 'runtime payload unexpectedly contains build artifacts\n' >&2
 	exit 1
 fi
+
+package_list="$(cd "$REPO_ROOT" && cargo package -p lean-semantic-search-runtime --list --allow-dirty)"
+for required in \
+	runtime/lakefile.lean \
+	runtime/lake-manifest.json \
+	runtime/LeanSemanticSearch.lean \
+	runtime/LeanSemanticSearch/Capability.lean \
+	runtime/README.md \
+	runtime/VENDORING.md \
+	runtime/LICENSE-APACHE \
+	runtime/LICENSE-MIT
+do
+	if ! printf '%s\n' "$package_list" | grep -Fxq "$required"; then
+		printf 'cargo package output is missing runtime payload path: %s\n' "$required" >&2
+		exit 1
+	fi
+done
 
 (
 	cd "$RUNTIME_ROOT"

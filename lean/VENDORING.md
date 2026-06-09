@@ -43,8 +43,9 @@ writes a generated `lean-toolchain`.
 
 ## Runtime Source Digest
 
-The runtime source digest covers the runtime source payload and license files, excluding this vendoring note so the
-recorded value is not self-referential. Compute it from the repository root:
+The runtime source digest covers the runtime source payload and license files, excluding README.md and this vendoring
+note so documentation-only changes do not change the cache key and the recorded value is not self-referential. Compute
+it from the repository root:
 
 ```sh
 cd ~/Code/lean-semantic-search
@@ -54,13 +55,12 @@ cd ~/Code/lean-semantic-search
     lean/lake-manifest.json \
     lean/LeanSemanticSearch.lean \
     'lean/LeanSemanticSearch/**' \
-    lean/README.md \
     LICENSE-APACHE \
     LICENSE-MIT
 } | LC_ALL=C sort -z | xargs -0 shasum -a 256 | shasum -a 256
 ```
 
-`runtime_source_digest`: `f25521c5112e9fac334d905a1940e498057e39c4422cdf1a63ad7f7b15017a00`
+`runtime_source_digest`: `2e45b2654f892d0b1f2b20d59d4c484c02de454d93f9f4ca4a93d5de33103459`
 
 ## Runtime Build Measurement
 

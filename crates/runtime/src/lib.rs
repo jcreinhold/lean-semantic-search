@@ -18,7 +18,10 @@ use std::path::{Path, PathBuf};
 use lean_rs_worker_protocol::worker_exports::{
     doctor_signature, json_command_signature, metadata_signature, streaming_command_signature,
 };
-use lean_toolchain::{CargoLeanCapability, LeanBuiltCapability, LeanExportSignature, LinkDiagnostics};
+use lean_toolchain::{
+    CargoLeanCapability, LeanBuiltCapability, LeanBuiltCapabilityError, LeanExportSignature, LeanLibraryDependency,
+    LinkDiagnostics,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
@@ -31,7 +34,7 @@ const CACHE_SCHEMA_VERSION: u32 = 1;
 pub const SOURCE_REVISION: &str = "f504ad7616de785fe5cbf6f9d41684f9bd552e23";
 /// Digest of the runtime Lean payload, using the file-set rule in
 /// `lean/VENDORING.md`.
-pub const RUNTIME_SOURCE_DIGEST: &str = "f25521c5112e9fac334d905a1940e498057e39c4422cdf1a63ad7f7b15017a00";
+pub const RUNTIME_SOURCE_DIGEST: &str = "2e45b2654f892d0b1f2b20d59d4c484c02de454d93f9f4ca4a93d5de33103459";
 /// Lake package name owned by the runtime payload.
 pub const PACKAGE_NAME: &str = "lean-semantic-search";
 const MATERIALIZED_PACKAGE_NAME: &str = "lean_semantic_search";
@@ -73,6 +76,29 @@ pub struct SemanticSearchRuntime {
     pub built: LeanBuiltCapability,
     /// Runtime payload provenance for diagnostics and cache validation.
     pub provenance: SemanticSearchRuntimeProvenance,
+}
+
+impl SemanticSearchRuntime {
+    /// Return the loader dependency descriptor for hosts that link another
+    /// capability against `LeanSemanticSearch`.
+    ///
+    /// This keeps the materialized package identifier, root module, and dylib
+    /// path as runtime-owned facts instead of making consumers reconstruct the
+    /// descriptor from provenance fields.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error`] when the built capability descriptor cannot resolve
+    /// its dylib path.
+    pub fn dependency(&self) -> Result<LeanLibraryDependency, Error> {
+        let dylib_path = self
+            .built
+            .dylib_path()
+            .map_err(|source| Error::BuiltCapability { source })?;
+        Ok(LeanLibraryDependency::path(dylib_path)
+            .export_symbols_for_dependents()
+            .initializer(MATERIALIZED_PACKAGE_NAME, LIBRARY_NAME))
+    }
 }
 
 /// Materialized semantic-search source package plus provenance.
@@ -161,6 +187,13 @@ pub enum Error {
         /// Lean/Lake diagnostic.
         #[source]
         source: LinkDiagnostics,
+    },
+    /// Built runtime descriptor was incomplete or invalid.
+    #[error("semantic-search runtime built capability descriptor is invalid: {source}")]
+    BuiltCapability {
+        /// Descriptor resolution failure.
+        #[source]
+        source: LeanBuiltCapabilityError,
     },
 }
 
@@ -495,7 +528,7 @@ fn digest_entries(source_root: &Path) -> Result<Vec<(String, String)>, Error> {
                 source_path.display()
             ))
         })?;
-        if excluded_runtime_path(relative) || relative == Path::new("VENDORING.md") {
+        if excluded_runtime_path(relative) || matches!(relative.to_str(), Some("README.md" | "VENDORING.md")) {
             continue;
         }
         let canonical = canonical_digest_path(relative)?;
@@ -511,9 +544,6 @@ fn canonical_digest_path(relative: &Path) -> Result<String, Error> {
     let text = relative.to_string_lossy();
     if text == "LICENSE-APACHE" || text == "LICENSE-MIT" {
         return Ok(text.into_owned());
-    }
-    if text == "README.md" {
-        return Ok("lean/README.md".to_owned());
     }
     if text == "lakefile.lean" {
         return Ok("lean/lakefile.lean".to_owned());
@@ -719,6 +749,27 @@ mod tests {
         assert_eq!(sidecar.library, LIBRARY_NAME);
         assert_eq!(sidecar.toolchain_label, toolchain);
         assert_eq!(sidecar, package.provenance);
+        Ok(())
+    }
+
+    #[test]
+    fn runtime_dependency_descriptor_is_owned_by_runtime() -> Result<(), String> {
+        let dylib = PathBuf::from("/tmp/libLeanSemanticSearch.dylib");
+        let runtime = super::SemanticSearchRuntime {
+            built: lean_toolchain::LeanBuiltCapability::path(&dylib)
+                .package(MATERIALIZED_PACKAGE_NAME)
+                .module(LIBRARY_NAME),
+            provenance: SemanticSearchRuntimeProvenance::new("leanprover/lean4:v4.31.0-rc1"),
+        };
+        let dependency = runtime.dependency().map_err(|error| error.to_string())?;
+
+        assert_eq!(dependency.path_ref(), dylib.as_path());
+        assert!(dependency.exports_symbols_for_dependents());
+        let initializer = dependency
+            .module_initializer()
+            .ok_or_else(|| "dependency should carry module initializer".to_owned())?;
+        assert_eq!(initializer.package_name(), MATERIALIZED_PACKAGE_NAME);
+        assert_eq!(initializer.module_name(), LIBRARY_NAME);
         Ok(())
     }
 
