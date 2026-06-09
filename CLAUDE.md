@@ -67,10 +67,10 @@ steps:
 - `retrieval`: storage-neutral semantic candidate generation over feature rows. Hides ranking weights, rarity weighting,
   fanout/posting limits, broad-head pruning, and the multi-lane bounded top-k. Callers see ranked candidates +
   feature-family explanations + diagnostics, never postings, heaps, composite scores, or raw keys. Ranks over a `Corpus`
-  trait (the seam a later persistent store fills) with the in-memory inverted index as the reference impl; `retrieve_across`
-  fans one anchor across a slice of corpora. No storage dependency, no on-disk layout, no downstream ranking policy in
-  this crate. Carries its own `RETRIEVAL_POLICY_VERSION` (`lean-semantic-search.retrieval.v2`); adds no DTOs to
-  `contract`. See `docs/architecture/04-persistence.md`.
+  trait (the seam a later persistent store fills) with the in-memory inverted index as the reference impl;
+  `retrieve_across` fans one anchor across a slice of corpora. No storage dependency, no on-disk layout, no downstream
+  ranking policy in this crate. Carries its own `RETRIEVAL_POLICY_VERSION` (`lean-semantic-search.retrieval.v2`); adds
+  no DTOs to `contract`. See `docs/architecture/04-persistence.md`.
 
 **The Lean exports and Rust constants must stay in lockstep.** The five `@[export lean_semantic_search_*]` functions in
 `Capability.lean` correspond one-to-one to the `*_EXPORT`/`*_COMMAND` constants in `crates/capability/src/lib.rs`, and
