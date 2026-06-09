@@ -20,8 +20,8 @@ use lean_rs_worker_protocol::worker_exports::{
 };
 use lean_toolchain::{
     CargoLeanCapability, GeneratedSourceFile, LeanBuiltCapability, LeanBuiltCapabilityError, LeanExportSignature,
-    LeanLibraryDependency, LinkDiagnostics, SourcePackageError, SourcePackageMaterializationRequest,
-    materialize_source_package as materialize_with_toolchain,
+    LeanLibraryDependency, LinkDiagnostics, SourcePackageError, SourcePackageManifestPolicy,
+    SourcePackageMaterializationRequest, materialize_source_package as materialize_with_toolchain,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -342,6 +342,7 @@ fn source_package_request(
         .into_iter()
         .map(PathBuf::from)
         .collect(),
+        manifest_policy: SourcePackageManifestPolicy::ZeroPackages,
     })
 }
 
