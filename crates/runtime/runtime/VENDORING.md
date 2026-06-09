@@ -48,7 +48,6 @@ note so documentation-only changes do not change the cache key and the recorded 
 it from the repository root:
 
 ```sh
-cd ~/Code/lean-semantic-search
 {
   git ls-files -z --cached --others --exclude-standard -- \
     lean/lakefile.lean \
@@ -64,9 +63,9 @@ cd ~/Code/lean-semantic-search
 
 ## Runtime Build Measurement
 
-Recorded 2026-06-09 on macOS arm64 (`Darwin Mac 25.4.0`), Apple M4 Pro, Lean toolchain
-`leanprover/lean4:v4.31.0-rc1`. Runtime payload: 14 Lean source files (`LeanSemanticSearch.lean` plus 13 files under
-`LeanSemanticSearch/`), zero Lake packages.
+Recorded 2026-06-09 on macOS arm64 (`Darwin Mac 25.4.0`), Apple M4 Pro, Lean toolchain `leanprover/lean4:v4.31.0-rc1`.
+Runtime payload: 14 Lean source files (`LeanSemanticSearch.lean` plus 13 files under `LeanSemanticSearch/`), zero Lake
+packages.
 
 Command:
 

@@ -12,8 +12,8 @@ live.
 
 ## What the persistent layer owns, and what it must not
 
-The persistent layer — this seam plus the later store — owns only the **semantic index** needed to generate candidates.
-It never carries the vocabulary a consumer reasons in.
+The persistent layer—this seam plus the later store—owns only the **semantic index** needed to generate candidates. It
+never carries the vocabulary a consumer reasons in.
 
 | Concern | Owner |
 | --- | --- |
@@ -31,31 +31,31 @@ corpus came from, or how a candidate should be displayed.
 
 Ranking walks the anchor's planned keys. For each key it needs three things and no more: the key's **posting list** (the
 candidates that carry it), the key's **fanout count** (to judge whether the posting is too broad to expand), and the
-corpus **document total** (to weight a match by rarity). Everything else a planned key carries — its feature family, its
-base weight, its posting limit, whether it admits a candidate alone — comes from the *anchor's own key*, decided when
-the anchor was planned from its low-signal markers. The candidate side contributes only membership.
+corpus **document total** (to weight a match by rarity). Everything else a planned key carries—its feature family, its
+base weight, its posting limit, whether it admits a candidate alone—comes from the *anchor's own key*, decided when the
+anchor was planned from its low-signal markers. The candidate side contributes only membership.
 
 So a candidate never has to be hydrated to be ranked. A backend can answer fanout from a `COUNT`, postings from an
-indexed scan, and rarity from a stored row total, without ever loading a declaration's features. Hydration — turning a
-ranked id into something a human reads — is a consumer step, downstream of and outside retrieval.
+indexed scan, and rarity from a stored row total, without ever loading a declaration's features. Hydration—turning a
+ranked id into something a human reads—is a consumer step, downstream of and outside retrieval.
 
 ## The `Corpus` trait
 
 `Corpus` exposes exactly what the ranking loop consumes:
 
-- `document_total()` — the corpus size, for the rarity curve. One number per corpus per query.
-- `fanout(keys)` — the match count for each key, returned aligned to the input. **Batched** so a SQL backend answers in
+- `document_total()`—the corpus size, for the rarity curve. One number per corpus per query.
+- `fanout(keys)`—the match count for each key, returned aligned to the input. **Batched** so a SQL backend answers in
   one query rather than one per key, and so posting and broad-head pruning can judge a key's selectivity *before*
   touching postings.
-- `postings(key, limit)` — the declaration ids carrying a key, bounded by the caller's posting limit so a SQL backend
-  can `LIMIT` the scan. Called only for keys that survived fanout pruning.
-- `declaration_row(declaration_id)` — the feature row of a corpus member, so a member can serve as an anchor (self-audit
+- `postings(key, limit)`—the declaration ids carrying a key, bounded by the caller's posting limit so a SQL backend can
+  `LIMIT` the scan. Called only for keys that survived fanout pruning.
+- `declaration_row(declaration_id)`—the feature row of a corpus member, so a member can serve as an anchor (self-audit
   and corpus-versus-corpus). Proof-goal anchors are built from a live row and never call this.
 
 Every method is expressible by both an in-memory map and a per-key SQL query, and the methods are batched wherever a SQL
 backend would otherwise issue one query per key.
 
-### Where the trait lives — design it twice
+### Where the trait lives—design it twice
 
 The trait lives in `retrieval`, and the later store depends on `retrieval` to implement it. Four placements were
 weighed:
@@ -63,11 +63,11 @@ weighed:
 1. **Trait in `retrieval`, store implements it (chosen).** Retrieval is the high-level module; it owns the abstraction
    it needs, and the low-level store depends inward on that abstraction. The ranking loop is written once over
    `&dyn Corpus`. `retrieval` takes **no** storage dependency, and there is **no `retrieval -> store` edge**.
-2. **Trait in `contract`.** Avoids an edge either way, but `contract` is the pure cross-repository JSON contract — serde
+2. **Trait in `contract`.** Avoids an edge either way, but `contract` is the pure cross-repository JSON contract—serde
    DTOs, opaque keys, version constants. A behavioral trait that returns postings is not a DTO and does not belong in it
    (see `00-boundary.md`).
 3. **Keep `SemanticIndex` concrete and add a second concrete `PersistentIndex` later.** Copies the ranking loop per
-   backend — the one outcome the seam exists to prevent.
+   backend—the one outcome the seam exists to prevent.
 4. **Generic `Corpus<Key>`.** There is one key encoding (`OpaqueFeatureKey`). Parameterizing over a key type before a
    second encoding exists is generality without a payer.
 
@@ -78,7 +78,7 @@ store-implements-retrieval edge it introduces is dependency inversion working as
 
 `retrieve_across(corpora, anchor, limit)` ranks one anchor against a slice of corpora and merges the result into one
 bounded, ranked candidate list. Single-corpus retrieval is the one-element case. Each corpus weights matches by its own
-document total and fanout — rarity is relative to the corpus a key was found in — and accumulation is keyed by
+document total and fanout—rarity is relative to the corpus a key was found in—and accumulation is keyed by
 `declaration_id`, so a candidate that appears in more than one corpus merges once, summing its contributions.
 
 Corpus identity stays with the caller. A merged candidate carries only its id, rank, and feature-family explanations;
@@ -92,7 +92,7 @@ deterministic and independent of the order the corpora are passed in.
 ## The multi-lane recall guarantee
 
 Ranking accumulates two sub-scores per candidate: a fingerprint/statement score and a role/binder score. A single
-combined top-k ranks by their total — and fingerprint families weigh far more than role families (statement 100 down to
+combined top-k ranks by their total—and fingerprint families weigh far more than role families (statement 100 down to
 conclusion 45, against role constants 18 down to heads 3). So a cohort of candidates sharing a strong fingerprint can
 fill the bound and evict a candidate whose only match is a rare, selective role key, even though that role match is
 exactly the signal a caller wanted surfaced.
@@ -113,6 +113,6 @@ changes, the change moves `RETRIEVAL_POLICY_VERSION` from `lean-semantic-search.
 ## What this note does not add
 
 No SQLite, file, mmap, or storage dependency enters the shared crates here; no on-disk layout is fixed. The `Corpus`
-trait carries no display, provenance, or audit field. The candidate output shape — `Candidate`, `MatchExplanation`,
-`FeatureFamily` — is unchanged, and no score, weight, posting, or heap crosses the surface. The SQLite implementation of
+trait carries no display, provenance, or audit field. The candidate output shape—`Candidate`, `MatchExplanation`,
+`FeatureFamily`—is unchanged, and no score, weight, posting, or heap crosses the surface. The SQLite implementation of
 this seam is the subject of the next note.

@@ -8,8 +8,8 @@ matches from being crowded out behind fingerprint cohorts. It consumes the opaqu
 rows from `lean-semantic-search-contract` and returns ranked candidates explained in stable feature-family terms, with
 structured diagnostics for pruning and per-lane saturation.
 
-It ranks over a `Corpus` trait — the seam a persistent store later fills — with the in-memory inverted `SemanticIndex`
-as the reference implementation: a view over rows the caller already holds, not a database. `retrieve_across` fans one
+It ranks over a `Corpus` trait—the seam a persistent store later fills—with the in-memory inverted `SemanticIndex` as
+the reference implementation: a view over rows the caller already holds, not a database. `retrieve_across` fans one
 anchor across a slice of corpora and merges the result into one bounded, ranked list. A proof-goal anchor starts from a
 source-backed feature row, never from rendered goal text.
 
@@ -31,11 +31,11 @@ use lean_semantic_search_retrieval::{Anchor, SemanticIndex, retrieve_across};
 
 ## See also
 
-- Project README: ../../README.md
-- Boundary note: ../../docs/architecture/00-boundary.md
-- Retrieval boundary: ../../docs/architecture/03-retrieval.md
-- Persistence seam: ../../docs/architecture/04-persistence.md
-- DTO contract crate: ../contract/README.md
+- [Project README](https://github.com/jcreinhold/lean-semantic-search/blob/main/README.md)
+- [Boundary note](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/00-boundary.md)
+- [Retrieval boundary](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/03-retrieval.md)
+- [Persistence seam](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/04-persistence.md)
+- [DTO contract crate](https://github.com/jcreinhold/lean-semantic-search/blob/main/crates/contract/README.md)
 
 ## License
 

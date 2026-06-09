@@ -27,9 +27,9 @@ use lean_semantic_search_contract::CapabilityMetadata;
 
 ## See also
 
-- Project README: ../../README.md
-- Boundary note: ../../docs/architecture/00-boundary.md
-- Capability contract: ../../docs/architecture/01-capability-contract.md
+- [Project README](https://github.com/jcreinhold/lean-semantic-search/blob/main/README.md)
+- [Boundary note](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/00-boundary.md)
+- [Capability contract](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/01-capability-contract.md)
 
 ## License
 

@@ -26,10 +26,10 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ### Added
 
-- `lean-semantic-search-retrieval`: a `Corpus` trait — the storage seam a later persistent store implements — with the
+- `lean-semantic-search-retrieval`: a `Corpus` trait—the storage seam a later persistent store implements—with the
   in-memory inverted index as the reference implementation, and `retrieve_across` for fanning one anchor across a slice
   of corpora into one bounded, ranked list.
-- `lean-semantic-search-store`: a persisted, on-disk `Corpus` over SQLite — a streaming, order-agnostic build with a
+- `lean-semantic-search-store`: a persisted, on-disk `Corpus` over SQLite—a streaming, order-agnostic build with a
   query-bounded resident set and an atomic single-file publish. `Store::open_fresh` reuses a corpus only on a matching
   opaque `corpus_token` and matching `schema_version`/`policy_version`, reporting every mismatch or corruption as a
   structured `CacheMiss` rather than an error; `set_latest`/`cleanup` are neutral, latest-pointer-protecting,
@@ -52,7 +52,7 @@ Initial release of the shared semantic-search package for Lean tooling.
 ### Added
 
 - `lean-semantic-search-contract`: stable serde DTOs, opaque keys, diagnostics, version constants, and response
-  envelopes — the cross-repository JSON contract.
+  envelopes—the cross-repository JSON contract.
 - `lean-semantic-search-capability`: worker-facing command names, export names, advertised facts, and empty-diagnostic
   helpers.
 - `lean-semantic-search-retrieval`: storage-neutral semantic candidate generation over feature rows, carrying its own

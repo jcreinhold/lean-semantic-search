@@ -34,9 +34,9 @@ presentation and workflow policy. Two alternatives were rejected:
 A crate exists only to hide something. Retrieval—storage-neutral candidate generation, ranking weights, fanout and top-k
 limits, saturation diagnostics—becomes its own crate once that behavior exists, not before.
 
-The runtime crate hides package-owned capability distribution. Downstream hosts ask for a built
-`LeanSemanticSearch` capability for a specific toolchain/sysroot; they do not copy `lean/`, reconstruct source digests,
-or decide which Lean files ship at runtime.
+The runtime crate hides package-owned capability distribution. Downstream hosts ask for a built `LeanSemanticSearch`
+capability for a specific toolchain/sysroot; they do not copy `lean/`, reconstruct source digests, or decide which Lean
+files ship at runtime.
 
 ## What Must Not Leak
 
