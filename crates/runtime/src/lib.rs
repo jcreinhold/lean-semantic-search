@@ -575,7 +575,7 @@ mod tests {
     #[test]
     fn materialization_writes_toolchain_manifest_and_provenance() -> Result<(), String> {
         let temp = temp_cache()?;
-        let toolchain = "leanprover/lean4:v4.31.0-rc1".to_owned();
+        let toolchain = "leanprover/lean4:v4.31.0-rc2".to_owned();
         let package = materialize_source_package(SemanticSearchSourcePackageRequest {
             cache_root: temp.path().to_path_buf(),
             toolchain_label: toolchain.clone(),
@@ -626,7 +626,7 @@ mod tests {
             built: lean_toolchain::LeanBuiltCapability::path(&dylib)
                 .package(MATERIALIZED_PACKAGE_NAME)
                 .module(LIBRARY_NAME),
-            provenance: SemanticSearchRuntimeProvenance::new("leanprover/lean4:v4.31.0-rc1"),
+            provenance: SemanticSearchRuntimeProvenance::new("leanprover/lean4:v4.31.0-rc2"),
         };
         let dependency = runtime.dependency().map_err(|error| error.to_string())?;
 
@@ -645,7 +645,7 @@ mod tests {
         let temp = temp_cache()?;
         let request = SemanticSearchSourcePackageRequest {
             cache_root: temp.path().to_path_buf(),
-            toolchain_label: "leanprover/lean4:v4.31.0-rc1".to_owned(),
+            toolchain_label: "leanprover/lean4:v4.31.0-rc2".to_owned(),
         };
         let first = materialize_source_package(request.clone()).map_err(|error| error.to_string())?;
         let marker = first.project_root.join("warm-marker");
@@ -661,7 +661,7 @@ mod tests {
         let temp = temp_cache()?;
         let request = SemanticSearchSourcePackageRequest {
             cache_root: temp.path().to_path_buf(),
-            toolchain_label: "leanprover/lean4:v4.31.0-rc1".to_owned(),
+            toolchain_label: "leanprover/lean4:v4.31.0-rc2".to_owned(),
         };
         let first = materialize_source_package(request.clone()).map_err(|error| error.to_string())?;
         let marker = first.project_root.join("warm-marker");
@@ -685,7 +685,7 @@ mod tests {
     fn concurrent_materialization_serializes_same_entry() -> Result<(), String> {
         let temp = temp_cache()?;
         let cache_root = temp.path().to_path_buf();
-        let toolchain = "leanprover/lean4:v4.31.0-rc1".to_owned();
+        let toolchain = "leanprover/lean4:v4.31.0-rc2".to_owned();
         let handles = (0..8)
             .map(|_| {
                 let cache_root = cache_root.clone();

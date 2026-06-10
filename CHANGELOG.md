@@ -10,6 +10,11 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded the `lean-rs` workspace crates (`lean-rs-worker-protocol`, `lean-toolchain`) to 0.2.2 and bumped the Lean
+  toolchain pin to `leanprover/lean4:v4.31.0-rc2` (header-identical to `-rc1`).
+
 ## [0.3.0]
 
 ### Added
