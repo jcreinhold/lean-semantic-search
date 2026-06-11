@@ -14,6 +14,11 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 - Upgraded the `lean-rs` workspace crates (`lean-rs-worker-protocol`, `lean-toolchain`) to 0.2.2 and bumped the Lean
   toolchain pin to `leanprover/lean4:v4.31.0-rc2` (header-identical to `-rc1`).
+- `RoleFeatures.factsFromStatement` now deduplicates role features in O(n) via a hash set on the (injective) feature
+  sort key, replacing the previous per-insert linear scan (O(n²) in a statement's feature count). The emitted feature
+  rows are byte-identical — `featuresJson`/`sortedFeatures` re-sort by the same key, so only the distinct set, not
+  insertion order, was ever observable — so the change is a pure performance fix with no cache-key or version impact.
+  (`runtime_source_digest` updated for the source edit.)
 
 ## [0.3.0]
 

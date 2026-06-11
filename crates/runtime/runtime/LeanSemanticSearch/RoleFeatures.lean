@@ -57,13 +57,20 @@ def RoleFeature.toJson (feature : RoleFeature) : Json :=
     , ("display", Json.str feature.name.toString)
     ]
 
-private def containsFeature (features : Array RoleFeature) (feature : RoleFeature) : Bool :=
-  features.any fun existing =>
-    existing.role == feature.role && existing.name == feature.name
-
-private def pushFeature (features : Array RoleFeature) (feature : RoleFeature) :
-    Array RoleFeature :=
-  if containsFeature features feature then features else features.push feature
+/-- Keep the first occurrence of each distinct feature, deduplicating on the
+    injective `sortKey` ("{role}:{name}") with a hash set — O(n) rather than the
+    previous per-insert linear scan (O(n²) over a statement's features). The
+    observable output is unchanged: `featuresJson`/`sortedFeatures` re-sort by the
+    same key, so only the distinct *set*, not insertion order, is ever emitted. -/
+private def distinctFeatures (features : Array RoleFeature) : Array RoleFeature := Id.run do
+  let mut seen : Std.HashSet String := {}
+  let mut result := #[]
+  for feature in features do
+    let key := feature.sortKey
+    unless seen.contains key do
+      seen := seen.insert key
+      result := result.push feature
+  pure result
 
 def sortedFeatures (features : Array RoleFeature) : Array RoleFeature :=
   features.qsort fun left right => left.sortKey < right.sortKey
@@ -97,18 +104,15 @@ private def isBroadHead (name : Name) : Bool :=
 private def addConstants
     (role : Role)
     (constants : Array Name)
-    (features : Array RoleFeature) : Array RoleFeature := Id.run do
-  let mut result := features
-  for name in constants do
-    result := pushFeature result { role, name }
-  pure result
+    (features : Array RoleFeature) : Array RoleFeature :=
+  constants.foldl (init := features) fun result name => result.push { role, name }
 
 private def addHead
     (role : Role)
     (head? : Option Name)
     (features : Array RoleFeature) : Array RoleFeature :=
   match head? with
-  | some name => pushFeature features { role, name }
+  | some name => features.push { role, name }
   | none => features
 
 def lowSignalMarkers (features : Array RoleFeature) : Array String := Id.run do
@@ -140,6 +144,7 @@ def factsFromStatement (statement : StatementShape) :
       features := addHead .hypothesisHead binder.headConst? features
     else
       features := addHead .binderDomainHead binder.headConst? features
+  features := distinctFeatures features
   pure (sortedFeatures features, lowSignalMarkers features)
 
 end LeanSemanticSearch.RoleFeatures
