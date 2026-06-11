@@ -10,6 +10,8 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.3.1]
+
 ### Changed
 
 - Upgraded the `lean-rs` workspace crates (`lean-rs-worker-protocol`, `lean-toolchain`) to 0.2.2 and bumped the Lean

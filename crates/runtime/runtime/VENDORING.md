@@ -59,7 +59,7 @@ it from the repository root:
 } | LC_ALL=C sort -z | xargs -0 shasum -a 256 | shasum -a 256
 ```
 
-`runtime_source_digest`: `8d68c6aeffb8eb6a444355b3f4bca88fd02ade13f197d9f3a8518f574a020c6b`
+`runtime_source_digest`: `2f55a191f9b4c41f9beabd79b44131456643f68f2424a7d1cde35d0ce5e619f0`
 
 ## Runtime Build Measurement
 
