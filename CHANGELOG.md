@@ -10,6 +10,21 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.4.0]
+
+### Changed
+
+- **Breaking:** upgraded the `lean-rs` workspace crates (`lean-rs-worker-protocol`, `lean-toolchain`) from `0.2` to
+  `0.3`. These crates surface `lean-toolchain` types (e.g. `LeanBuiltCapability`) in this crate's public API, so a
+  consumer must move to the `lean-rs` `0.3` line in lockstep — `0.2.x` and `0.3.x` cannot coexist in one dependency
+  graph.
+
+### Internal
+
+- `deny.toml` now version-floors the entire `lean-rs` crate family at `>= 0.3`. A future partial upgrade that drags a
+  pre-0.3 copy back into the graph now fails `cargo deny check` with a clear, named diagnostic instead of surfacing as a
+  deep `E0308` type mismatch in a downstream consumer.
+
 ## [0.3.1]
 
 ### Changed
