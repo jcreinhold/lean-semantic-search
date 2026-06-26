@@ -10,13 +10,23 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.4.1]
+
 ### Changed
 
 - Bumped the Lean toolchain pin to `leanprover/lean4:v4.32.0-rc1`, the toolchain the published `lean-rs` 0.3.0 release
   is built against, so downstream hosts can build the worker against the pinned toolchain. The Lean package compiles
-  unchanged, so the vendored runtime payload and `runtime_source_digest` are unchanged; only the cosmetic
-  `toolchain_label` test/doc literals in `lean-semantic-search-runtime` were refreshed. The `lean-rs` crates stay on the
-  `0.3` line (already the latest), so no workspace-dependency, `deny.toml` floor, or `rust-version` change was needed.
+  unchanged under it; the only refreshed literals are the cosmetic `toolchain_label` test/doc examples in
+  `lean-semantic-search-runtime`. The `lean-rs` crates stay on the `0.3` line (already the latest), so no
+  workspace-dependency, `deny.toml` floor, or `rust-version` change was needed.
+- Realigned the Lean package version (`lean/lakefile.lean`) to the unified workspace version `0.4.1`; it had been left
+  at `0.3.1` through the `0.4.0` release. Because the lakefile is part of the vendored runtime payload, this re-synced
+  the copy under `crates/runtime/runtime/` and moved `RUNTIME_SOURCE_DIGEST` to match the new source.
+
+### Internal
+
+- Reformatted `deny.toml` with `taplo` (cosmetic key and array ordering only); the `lean-rs` `>= 0.3` floor and every
+  ban entry are unchanged.
 
 ## [0.4.0]
 
