@@ -10,6 +10,8 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.4.2]
+
 ### Changed
 
 - Bumped the Lean toolchain pin to `leanprover/lean4:v4.32.0`, promoting the `-rc1` pin to the stable release. The Lean
