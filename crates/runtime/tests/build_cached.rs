@@ -11,7 +11,7 @@ fn build_cached_against_explicit_sysroot() -> Result<(), String> {
         .map(PathBuf::from)
         .ok_or_else(|| "LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT is not set".to_owned())?;
     let toolchain = std::env::var("LEAN_SEMANTIC_SEARCH_RUNTIME_TOOLCHAIN")
-        .unwrap_or_else(|_| "leanprover/lean4:v4.32.0-rc1".to_owned());
+        .unwrap_or_else(|_| "leanprover/lean4:v4.32.0".to_owned());
     let temp = tempfile::tempdir().map_err(|error| error.to_string())?;
     let cold_start = std::time::Instant::now();
     let cold = build_cached(SemanticSearchRuntimeBuild {
