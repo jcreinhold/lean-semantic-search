@@ -10,13 +10,21 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.4.3]
+
 ### Changed
 
 - Bumped the Lean toolchain pin to `leanprover/lean4:v4.33.0-rc1`, the toolchain the already-adopted `lean-rs` 0.4
-  release is built against, so downstream hosts can build the worker against the pinned toolchain. The Lean package
-  compiles unchanged under it (no `runtime_source_digest` move); the only refreshed literals are the cosmetic
-  `toolchain_label` test/doc examples in `lean-semantic-search-runtime`. The `lean-rs` crates stay on the `0.4` line
-  (already the latest), so no workspace-dependency, `deny.toml` floor, or `rust-version` change was needed.
+  release is built against, so downstream hosts can build the worker against the pinned toolchain. The toolchain bump
+  itself required no Lean source change (the package compiles unchanged); the only refreshed literals are the cosmetic
+  `toolchain_label` test/doc examples in `lean-semantic-search-runtime`. (`runtime_source_digest` moved only because
+  this release's unified version bump touches `lean/lakefile.lean`, which is part of the vendored runtime payload.)
+
+### Internal
+
+- Raised the `deny.toml` `lean-rs`-family version floor from `>= 0.3` to `>= 0.4`, in lockstep with the workspace's
+  adoption of the `lean-rs` `0.4` line, so a stale pre-`0.4` copy dragged in by a not-yet-upgraded consumer fails
+  `cargo deny check` loudly instead of surfacing as a deep `E0308`.
 
 ## [0.4.2]
 
