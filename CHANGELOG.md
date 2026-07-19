@@ -10,6 +10,14 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped the Lean toolchain pin to `leanprover/lean4:v4.33.0-rc1`, the toolchain the already-adopted `lean-rs` 0.4
+  release is built against, so downstream hosts can build the worker against the pinned toolchain. The Lean package
+  compiles unchanged under it (no `runtime_source_digest` move); the only refreshed literals are the cosmetic
+  `toolchain_label` test/doc examples in `lean-semantic-search-runtime`. The `lean-rs` crates stay on the `0.4` line
+  (already the latest), so no workspace-dependency, `deny.toml` floor, or `rust-version` change was needed.
+
 ## [0.4.2]
 
 ### Changed
