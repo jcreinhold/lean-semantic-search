@@ -10,6 +10,18 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.5.0]
+
+### Changed
+
+- Advanced onto the `lean-rs` 0.5 line: `lean-rs-worker-protocol` and `lean-toolchain` pins move
+  from `"0.4"` to `"0.5"`. lean-rs 0.5.0 adds `entry_goals`/`locals` to
+  `LeanWorkerProofAttemptEnvelope` (additive, serde-defaulted) and repairs the host shim's
+  declaration-candidate scan; neither changes the contract or runtime behavior this package
+  consumes, but the lean-rs types re-exported in this package's public API must stay on one
+  lean-rs line downstream (`lean-host-mcp`). The minor bump carries that coupling.
+
+
 ## [0.4.3]
 
 ### Changed
