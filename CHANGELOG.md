@@ -10,6 +10,17 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.6.0]
+
+### Changed
+
+- Advanced onto the `lean-rs` 0.6 line: `lean-rs-worker-protocol` and `lean-toolchain` pins move
+  from `"0.5"` to `"0.6"`. lean-rs 0.6.0 adds pool-staleness eviction, byte-bounded import residue,
+  and independent session-pool capacity in the worker stack; the wire protocol is unchanged
+  (`PROTOCOL_VERSION` stays 10), so no contract or runtime behavior this package consumes changes,
+  but the lean-rs types re-exported in this package's public API must stay on one lean-rs line
+  downstream (`lean-host-mcp`). The minor bump carries that coupling.
+
 ## [0.5.0]
 
 ### Changed

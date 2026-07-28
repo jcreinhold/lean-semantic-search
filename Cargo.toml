@@ -9,15 +9,15 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/jcreinhold/lean-semantic-search"
 rust-version = "1.91"
-version = "0.5.0"
+version = "0.6.0"
 
 [workspace.dependencies]
 fs4 = "1.1"
-lean-rs-worker-protocol = "0.5"
-lean-semantic-search-capability = { path = "crates/capability", version = "0.5.0" }
-lean-semantic-search-contract = { path = "crates/contract", version = "0.5.0" }
-lean-semantic-search-retrieval = { path = "crates/retrieval", version = "0.5.0" }
-lean-toolchain = "0.5"
+lean-rs-worker-protocol = "0.6"
+lean-semantic-search-capability = { path = "crates/capability", version = "0.6.0" }
+lean-semantic-search-contract = { path = "crates/contract", version = "0.6.0" }
+lean-semantic-search-retrieval = { path = "crates/retrieval", version = "0.6.0" }
+lean-toolchain = "0.6"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
