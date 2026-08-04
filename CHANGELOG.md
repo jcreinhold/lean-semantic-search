@@ -10,6 +10,8 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.7.0]
+
 ### Changed
 
 - Bumped the Lean toolchain pin to `leanprover/lean4:v4.33.0-rc2` and advanced onto the `lean-rs` 0.7 line:
@@ -18,8 +20,9 @@ must have a corresponding `## [X.Y.Z]` section here.
   compatible releases); the wire protocol is unchanged, so no contract or runtime behavior this package consumes
   changes, but the lean-rs types re-exported in this package's public API must stay on one lean-rs line downstream
   (`lean-host-mcp`). The Lean package compiles unchanged under the new toolchain; only the cosmetic
-  `toolchain_label` test/doc literals in `lean-semantic-search-runtime` were refreshed. (`runtime_source_digest` did
-  not move: no Lean source edit.)
+  `toolchain_label` test/doc literals in `lean-semantic-search-runtime` were refreshed. (`runtime_source_digest` moved
+  only because this release's unified version bump touches `lean/lakefile.lean`, which is part of the vendored runtime
+  payload.)
 
 ### Internal
 
