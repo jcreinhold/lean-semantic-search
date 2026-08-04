@@ -10,6 +10,23 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped the Lean toolchain pin to `leanprover/lean4:v4.33.0-rc2` and advanced onto the `lean-rs` 0.7 line:
+  `lean-rs-worker-protocol` and `lean-toolchain` pins move from `"0.6"` to `"0.7"`. lean-rs 0.7.0 adds Lean 4.32.2 and
+  4.33.0-rc2 to its supported toolchain window (both share the byte-identical `lean.h` ABI of their preceding
+  compatible releases); the wire protocol is unchanged, so no contract or runtime behavior this package consumes
+  changes, but the lean-rs types re-exported in this package's public API must stay on one lean-rs line downstream
+  (`lean-host-mcp`). The Lean package compiles unchanged under the new toolchain; only the cosmetic
+  `toolchain_label` test/doc literals in `lean-semantic-search-runtime` were refreshed. (`runtime_source_digest` did
+  not move: no Lean source edit.)
+
+### Internal
+
+- Raised the `deny.toml` `lean-rs`-family version floor from `>= 0.4` to `>= 0.7`, in lockstep with the workspace's
+  adoption of the `lean-rs` `0.7` line, so a stale pre-`0.7` copy dragged in by a not-yet-upgraded consumer fails
+  `cargo deny check` loudly instead of surfacing as a deep `E0308`.
+
 ## [0.6.0]
 
 ### Changed

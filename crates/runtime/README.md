@@ -17,7 +17,7 @@ use lean_semantic_search_runtime::{SemanticSearchRuntimeBuild, build_cached};
 
 let runtime = build_cached(SemanticSearchRuntimeBuild {
     cache_root: std::path::PathBuf::from("/tmp/semantic-runtime-cache"),
-    toolchain_label: "leanprover/lean4:v4.33.0-rc1".to_owned(),
+    toolchain_label: "leanprover/lean4:v4.33.0-rc2".to_owned(),
     lean_sysroot: std::path::PathBuf::from("/path/to/elan/toolchain"),
 })?;
 # Ok::<(), lean_semantic_search_runtime::Error>(())
