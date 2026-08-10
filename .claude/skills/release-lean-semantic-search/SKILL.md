@@ -74,11 +74,11 @@ check locally.
 
 ### 4. Contract/version lockstep check (only if a schema or algorithm version changed)
 
-The Lean exports and Rust constants must stay in lockstep (see `CLAUDE.md`). If this release changed any schema or
+The Lean exports and Rust constants must stay in lockstep (see `AGENTS.md`). If this release changed any schema or
 algorithm version, confirm both sides moved together, in the commits being released:
 
 - Each version constant in `crates/contract/src/lib.rs`, plus `RETRIEVAL_POLICY_VERSION` in
-  `crates/retrieval/src/policy.rs`, must equal its mirror in `lean/LeanSemanticSearch/Json.lean`. `CLAUDE.md` lists the
+  `crates/retrieval/src/policy.rs`, must equal its mirror in `lean/LeanSemanticSearch/Json.lean`. `AGENTS.md` lists the
   constants and their current values; for any this release touched, compare the Rust and Lean sides directly rather than
   trusting that list to be current.
 - Every `@[export lean_semantic_search_*]` in `lean/LeanSemanticSearch/Capability.lean` still matches a
@@ -87,12 +87,11 @@ algorithm version, confirm both sides moved together, in the commits being relea
 A version is opaque to callers and comparable only under matching version fields — a drift here is a contract break, not
 a cosmetic one. If they are out of sync, fix before tagging.
 
-### 5. PR, merge, then tag — irreversible
+### 5. Tag — irreversible
 
-Open a PR with the version + CHANGELOG (+ any version-constant) changes; merge after `ci.yml` is green. Before tagging,
-re-verify on the merge commit:
+Before tagging, re-verify on the commit that will be tagged:
 
-- `git rev-parse --abbrev-ref HEAD` is `main` and up to date with `origin/main`.
+- `ci.yml` is green on that commit.
 - `[workspace.package].version`, every pinned `[workspace.dependencies]` version, and `lean/lakefile.lean` all equal the
   intended `X.Y.Z`.
 - `CHANGELOG.md` has a `## [X.Y.Z]` heading.

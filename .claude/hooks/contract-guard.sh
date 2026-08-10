@@ -8,7 +8,7 @@
 # PreToolUse veto) would be wrong here: lockstep spans two files in two
 # languages, so the first of two necessary edits must be allowed through.
 #
-# The two contracts (CLAUDE.md, docs/architecture/01-capability-contract.md):
+# The two contracts (AGENTS.md, docs/architecture/01-capability-contract.md):
 #
 #   1. VERSION LOCKSTEP. The contract version *values* (canonical.expr.vN,
 #      features.roles.vN, features.role_key.vN, declaration_features.vN,

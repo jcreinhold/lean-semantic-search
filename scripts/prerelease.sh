@@ -33,7 +33,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # share `[workspace.package] version`, so any member would do.
 VERSION_ANCHOR_CRATE="lean-semantic-search-contract"
 
-# Files the CLAUDE.md markdown policy covers (mirrors ci.yml's policy job).
+# Files the AGENTS.md markdown policy covers (mirrors ci.yml's policy job).
 MDWRIGHT_TARGETS=(README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md lean/VENDORING.md)
 
 # -- logging ----------------------------------------------------------------

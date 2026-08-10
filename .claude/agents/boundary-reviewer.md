@@ -32,7 +32,7 @@ memory):
 - `docs/architecture/01-capability-contract.md` — export names, request shapes, response envelopes,
   versions
 - `docs/architecture/03-retrieval.md` — what the retrieval crate is allowed to expose
-- `CLAUDE.md` and `AGENTS.md` — the invariants stated as prose
+- `AGENTS.md` — the invariants stated as prose
 - `crates/contract/src/lib.rs`, `crates/capability/src/lib.rs` — the version constants and export
   identity that must stay in lockstep with `lean/LeanSemanticSearch/Json.lean` and `Capability.lean`
 

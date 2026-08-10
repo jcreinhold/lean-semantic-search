@@ -80,9 +80,9 @@ and verify with `cargo deny check`.
 ### 4. Update the Rust floor only if lean-rs raised it
 
 The `lean-rs` crates carry a `rust-version`. Adopting a new line can raise this repo's floor. If so, bump `rust-version`
-in `Cargo.toml` `[workspace.package]` and update the matching prose: `CLAUDE.md` ("Rust stable with `rust-version =
+in `Cargo.toml` `[workspace.package]` and update the matching prose: `AGENTS.md` ("Rust stable with `rust-version =
 …`") and `README.md` ("Requirements"). If lean-rs didn't move it, leave it alone — there is no Lean-version string to
-update in that prose (CLAUDE.md/README pin only Rust and say "a Lean 4 toolchain visible to `lake`", deliberately
+update in that prose (AGENTS.md/README pin only Rust and say "a Lean 4 toolchain visible to `lake`", deliberately
 version-agnostic).
 
 ### 5. Rebuild, test, and re-sync the vendored runtime
@@ -154,7 +154,7 @@ Leave the actual version bump and tag to the release: the `release-lean-semantic
 
 ### 8. Commit
 
-Branch first if you're on `main`. Use the repo's commit style, e.g. `Bump Lean toolchain to vX.Y.Z` (add `and lean-rs
+Use the repo's commit style, e.g. `Bump Lean toolchain to vX.Y.Z` (add `and lean-rs
 deps` if step 3 applied). Summarize in the body: the new toolchain, any lean-rs line and Rust-floor change, whether the
 runtime digest moved, and the test result.
 

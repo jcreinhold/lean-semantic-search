@@ -39,9 +39,9 @@ case "$file" in
 	;;
 *.md)
 	# The CI policy job only reflows README.md, AGENTS.md, docs/architecture/*.md,
-	# crates/*/README.md, and lean/README.md. CLAUDE.md and anything under
-	# .claude/ are NOT policy targets — hard-skip them so an edit to project
-	# memory or a skill/agent doc is never reflowed out from under Claude.
+	# crates/*/README.md, and lean/README.md. CLAUDE.md (the thin @AGENTS.md
+	# import) and anything under .claude/ are NOT policy targets — hard-skip
+	# them so an edit to a skill/agent doc is never reflowed out from under Claude.
 	case "$file" in
 	*/.claude/* | */CLAUDE.md | CLAUDE.md) : ;;
 	*)
