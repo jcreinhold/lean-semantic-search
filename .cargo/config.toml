@@ -18,3 +18,13 @@ LEAN_RS_NUM_THREADS = "1"
 # Quieter `tracing` output by default; override per-invocation with
 # `RUST_LOG=lean_rs=debug cargo ...`.
 RUST_LOG = "warn"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.debugging]
+inherits = "dev"
+debug = true
