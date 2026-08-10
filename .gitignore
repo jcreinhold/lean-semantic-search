@@ -42,6 +42,9 @@ crates/*/fuzz/target/
 # Claude harness state (the skills/ subtree is tracked; only ephemeral state is ignored)
 .claude/scheduled_tasks.lock
 
+# Pi harness state
+.pi/sessions/
+
 # Lean build outputs.
 **/.lake/
 **/lake-manifest.json
