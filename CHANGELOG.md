@@ -10,14 +10,21 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.7.1]
+
 ### Changed
 
 - Bumped the Lean toolchain pin to `leanprover/lean4:v4.34.0-rc1`, the toolchain the `lean-rs` 0.7 line builds
-  against. The Lean package compiles unchanged under the new toolchain; the vendored runtime payload and
-  `runtime_source_digest` are untouched. Only the cosmetic `toolchain_label` test/doc literals in
-  `lean-semantic-search-runtime` were refreshed. The `lean-rs` 0.7 line was already adopted in this workspace
-  (`lean-rs-worker-protocol` and `lean-toolchain` at `"0.7"`), so no dependency or `deny.toml` floor change rides
-  along.
+  against. The Lean package compiles unchanged under the new toolchain; the vendored runtime payload is untouched.
+  Only the cosmetic `toolchain_label` test/doc literals in `lean-semantic-search-runtime` were refreshed. The
+  `lean-rs` 0.7 line was already adopted in this workspace (`lean-rs-worker-protocol` and `lean-toolchain` at
+  `"0.7"`), so no dependency or `deny.toml` floor change rides along. (`runtime_source_digest` moved only because
+  this release's unified version bump touches `lean/lakefile.lean`, which is part of the vendored runtime payload.)
+
+### Internal
+
+- Refreshed `Cargo.lock` onto `lean-rs` 0.7.2 (`lean-rs-worker-protocol`, `lean-toolchain`, `lean-rs-abi`), within
+  the existing `"0.7"` requirements; the published crates' version requirements are unchanged.
 
 ## [0.7.0]
 
