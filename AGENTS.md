@@ -17,6 +17,7 @@ cargo test -p lean-semantic-search-contract  # single crate
 cargo test <name>                            # single test by substring
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps  # rustdoc link lints; clippy does not see them
 
 # Lean (always pass -d lean from the repo root; the package lives in lean/)
 lake -d lean build

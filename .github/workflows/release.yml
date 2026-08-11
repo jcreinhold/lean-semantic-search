@@ -47,6 +47,10 @@ jobs:
         run: cargo fmt --all --check
       - name: cargo clippy --all-targets -- -D warnings
         run: cargo clippy --all-targets -- -D warnings
+      - name: cargo doc --workspace --no-deps
+        # rustdoc lints are invisible to clippy but degrade the docs.rs
+        # pages this run is about to publish; a tagged version is immutable.
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
       - name: cargo nextest run
         run: cargo nextest run --workspace --profile ci --locked
       - name: cargo deny check

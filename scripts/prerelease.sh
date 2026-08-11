@@ -2,8 +2,8 @@
 # scripts/prerelease.sh — run every pre-release gate locally.
 #
 # This is the local mirror of `.github/workflows/release.yml`: it runs
-# the same gates as the `verify` job (fmt, clippy, nextest, cargo-deny,
-# lake build/test, runtime vendoring) plus the `publish` job's preflight checks
+# the same gates as the `verify` job (fmt, clippy, rustdoc, nextest,
+# cargo-deny, lake build/test, runtime vendoring) plus the `publish` job's preflight checks
 # (tag/version ↔ CHANGELOG consistency and a `cargo publish --workspace
 # --dry-run`), and the docs/toml policy checks `ci.yml` runs
 # (actionlint, mdwright, taplo). Run it before tagging a `vX.Y.Z`
@@ -141,6 +141,12 @@ run_gate "cargo fmt --all --check" \
 
 run_gate "cargo clippy --all-targets -- -D warnings" \
 	cargo clippy --all-targets -- -D warnings
+
+# rustdoc lints (broken intra-doc links, redundant explicit link targets)
+# are invisible to clippy but degrade the published docs.rs pages, and a
+# tagged crates.io version is immutable — catch them before tagging.
+run_gate "cargo doc --workspace --no-deps (rustdoc lints)" \
+	env RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
 
 run_gate "cargo nextest run --workspace --profile ci" \
 	cargo nextest run --workspace --profile ci --locked

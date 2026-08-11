@@ -59,6 +59,7 @@ lake -d lean build
 lake -d lean test
 scripts/check-runtime-vendoring.sh
 cargo clippy --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 mdwright fmt --check README.md AGENTS.md docs/architecture/*.md crates/*/README.md lean/README.md lean/VENDORING.md
 taplo fmt --check
 cargo deny check
