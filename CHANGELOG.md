@@ -10,6 +10,15 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped the Lean toolchain pin to `leanprover/lean4:v4.34.0-rc1`, the toolchain the `lean-rs` 0.7 line builds
+  against. The Lean package compiles unchanged under the new toolchain; the vendored runtime payload and
+  `runtime_source_digest` are untouched. Only the cosmetic `toolchain_label` test/doc literals in
+  `lean-semantic-search-runtime` were refreshed. The `lean-rs` 0.7 line was already adopted in this workspace
+  (`lean-rs-worker-protocol` and `lean-toolchain` at `"0.7"`), so no dependency or `deny.toml` floor change rides
+  along.
+
 ## [0.7.0]
 
 ### Changed
