@@ -34,7 +34,7 @@ pub(crate) struct PlannedKey {
 ///
 /// An anchor is the weighted set of semantic keys to look up. Build one with
 /// [`Anchor::from_declaration`] or [`Anchor::from_proof_goal`], then pass it to
-/// [`SemanticIndex::retrieve`](crate::SemanticIndex::retrieve).
+/// [`retrieve_across`](crate::retrieve_across).
 pub struct Anchor {
     keys: Vec<PlannedKey>,
 }

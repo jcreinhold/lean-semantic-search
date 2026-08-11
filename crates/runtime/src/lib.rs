@@ -4,7 +4,7 @@
 //! their own repositories. The crate owns the runtime payload, source digest,
 //! cache materialization, provenance sidecar, and explicit-sysroot Lake build.
 //! It does not own worker sessions or import policy; callers load the returned
-//! [`LeanBuiltCapability`](lean_toolchain::LeanBuiltCapability) with their
+//! [`LeanBuiltCapability`] with their
 //! chosen `lean-rs-worker-parent` configuration.
 
 #![allow(
