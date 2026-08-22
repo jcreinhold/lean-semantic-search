@@ -10,6 +10,21 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped the Lean toolchain pin to `leanprover/lean4:v4.34.0-rc2`, newly in the supported toolchain window of the
+  `lean-rs` 0.7.3 release. The Lean package compiles unchanged under the new toolchain; the vendored runtime payload
+  and `runtime_source_digest` are untouched. Only the cosmetic `toolchain_label` test/doc literals in
+  `lean-semantic-search-runtime` were refreshed. The `lean-rs` 0.7 line was already adopted in this workspace
+  (`lean-rs-worker-protocol` and `lean-toolchain` at `"0.7"`), so no `deny.toml` floor change rides along.
+
+### Internal
+
+- Refreshed `Cargo.lock` onto `lean-rs` 0.7.3, within the existing `"0.7"` requirements; the published crates'
+  version requirements are unchanged. lean-rs 0.7.3 raises its MSRV to Rust 1.94, which this workspace already
+  declares (`rust-version = "1.94"`); the stale `1.91` mentions in `AGENTS.md` and `README.md` were corrected to
+  match.
+
 ## [0.7.1]
 
 ### Changed

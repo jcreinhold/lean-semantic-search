@@ -44,7 +44,7 @@ transport-specific response types, or project runtime internals.
 
 ## Requirements
 
-- Rust stable, with the pinned minimum in `Cargo.toml` (`rust-version = "1.91"`).
+- Rust stable, with the pinned minimum in `Cargo.toml` (`rust-version = "1.94"`).
 - `clippy` and `rustfmt`; `rust-toolchain.toml` asks rustup for both.
 - A Lean 4 toolchain visible to `lake`.
 - Optional local tools for the full policy pass: `mdwright`, `taplo`, and `cargo-deny`.
