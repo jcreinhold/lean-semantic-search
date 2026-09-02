@@ -10,6 +10,15 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.7.4]
+
+### Changed
+
+- Updated dependencies: `lean-rs-worker-protocol` and `lean-toolchain` moved to the crates.io `0.9` requirements, and
+  `Cargo.lock` was refreshed onto the published crates. No public API of this workspace changed.
+  (`runtime_source_digest` moved because this release's unified version bump touches `lean/lakefile.lean`, which is
+  part of the vendored runtime payload.)
+
 ## [0.7.3]
 
 ### Changed
