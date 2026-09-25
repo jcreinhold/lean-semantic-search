@@ -12,7 +12,7 @@ abbrev leanSemanticSearchLeanOptions : Array LeanOption := #[
 ]
 
 package «lean-semantic-search» where
-  version := v!"0.7.5"
+  version := v!"0.7.6"
 
 @[default_target]
 lean_lib LeanSemanticSearch where

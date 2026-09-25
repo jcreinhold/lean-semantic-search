@@ -10,6 +10,16 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.7.6]
+
+### Changed
+
+- Bumped the pinned Lean toolchain to `leanprover/lean4:v4.35.0-rc3` and raised the `lean-rs-worker-protocol` and
+  `lean-toolchain` requirements to `0.9.2`, the first `lean-rs` release whose supported window includes 4.34.1 and
+  4.35.0-rc3 (`lean-toolchain` 0.9.1's build script rejects their `lean.h`). The Lean sources compile unchanged;
+  `runtime_source_digest` moves only because the packaged `lakefile.lean` carries the new version. No public API of this
+  workspace changed.
+
 ## [0.7.5]
 
 ### Changed

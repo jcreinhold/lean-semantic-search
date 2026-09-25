@@ -247,15 +247,15 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "lean-rs-abi"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4ed228f3f28da0c10b4a7788b9beaff9fbfbe7f1cceefe0b414d8cbf6367504"
+checksum = "41ad547ca6a2c270f444c055541377a5c8847a4a612c209c5fbcb12a5a0327c8"
 
 [[package]]
 name = "lean-rs-worker-protocol"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8656105f4861960ee2f572ca144d06fbe2dfa58c12ef01568a60f8ad7f9d138"
+checksum = "ca543d9c8cf89df6c7dfe482e3c3af2358f3990667c7ac8673254c5122538a63"
 dependencies = [
  "lean-toolchain",
  "serde",
@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-capability"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "lean-semantic-search-contract",
  "serde_json",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-contract"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-retrieval"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "lean-semantic-search-contract",
  "serde",
@@ -289,7 +289,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-runtime"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "fs4",
  "lean-rs-worker-protocol",
@@ -305,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-store"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "dhat",
  "lean-semantic-search-contract",
@@ -316,9 +316,9 @@ dependencies = [
 
 [[package]]
 name = "lean-toolchain"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "705890179db612054fe1cffb32d2b8c19131b3baccd5d4cefa5f44abe3b39cf9"
+checksum = "2b25d9dcfce07480d9c735a3519db22037a332b973918587a82861d18becfdb4"
 dependencies = [
  "fs4",
  "lean-rs-abi",
