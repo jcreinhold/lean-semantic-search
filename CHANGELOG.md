@@ -10,6 +10,19 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped the pinned Lean toolchain to `leanprover/lean4:v4.35.0-rc2` and raised the `lean-rs-worker-protocol` and
+  `lean-toolchain` requirements to `0.9.1`, the first `lean-rs` release whose supported window includes 4.35.0-rc2
+  (`lean-toolchain` 0.9.0's build script rejects that toolchain's `lean.h`). The Lean package compiles unchanged, so
+  `runtime_source_digest` does not move. No public API of this workspace changed.
+
+### Internal
+
+- Raised the `deny.toml` `lean-rs`-family version floor from `>= 0.7` to `>= 0.9`, catching up with the workspace's
+  adoption of the `lean-rs` `0.9` line, so a stale pre-`0.9` copy dragged in by a not-yet-upgraded consumer fails
+  `cargo deny check` loudly instead of surfacing as a deep `E0308`.
+
 ## [0.7.4]
 
 ### Changed
