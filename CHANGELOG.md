@@ -10,6 +10,18 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped the pinned Lean toolchain to `leanprover/lean4:v4.35.0` and raised the `lean-rs-worker-protocol` and
+  `lean-toolchain` requirements to `0.9.4`, the first `lean-rs` release whose supported window lists the final 4.35.0
+  (it ships the same `lean.h` as 4.35.0-rc3). The Lean sources compile unchanged, so `runtime_source_digest` does not
+  move. No public API of this workspace changed.
+
+### Internal
+
+- Allowed the new `clippy::assert_is_empty` lint (Rust 1.99) workspace-wide; its suggested
+  `assert_eq!(x, [] as [T; 0])` rewrite is less readable than `assert!(x.is_empty())`.
+
 ## [0.7.6]
 
 ### Changed
