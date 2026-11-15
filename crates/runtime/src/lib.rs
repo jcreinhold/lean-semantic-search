@@ -23,7 +23,7 @@ use lean_toolchain::{
     CargoLeanCapability, GeneratedSourceFile, LeanBuiltCapability, LeanBuiltCapabilityError, LeanExportSignature,
     LeanLibraryDependency, LinkDiagnostics, SourcePackageError, SourcePackageManifestPolicy,
     SourcePackageMaterializationRequest, materialize_source_package as materialize_with_toolchain,
-    with_materialized_source_package,
+    with_materialized_source_package, with_materialized_source_package_with_writer,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -261,6 +261,57 @@ pub fn build_cached_with_lock_wait(
             Ok(SemanticSearchRuntime {
                 built: (&built).into(),
                 provenance: package.provenance,
+            })
+        },
+    )
+}
+
+/// Build with an explicitly selected shared-writer helper.
+///
+/// The same helper retains entry and project lock custody from materialization
+/// through Lake execution and artifact publication. Cancellation stops further
+/// stages and requests owned command cleanup; an unavailable result never
+/// authorizes replay. The helper keeps active-work resources until scope exit.
+///
+/// `lock_timeout` bounds admission. Lake execution has its own bounded command
+/// budget and cleanup waits; this is not a whole-request deadline.
+///
+/// # Errors
+///
+/// Returns [`Error`] on admission, cancellation, materialization, or build
+/// failure. Lost or unknown helper responses remain failures without a proof
+/// verdict.
+pub fn build_cached_with_writer(
+    input: SemanticSearchRuntimeBuild,
+    writer_executable: &Path,
+    lock_timeout: Duration,
+    cancelled: impl Fn() -> bool,
+) -> Result<SemanticSearchRuntime, Error> {
+    ensure_runtime_payload_source(Path::new(RUNTIME_SOURCE_ROOT))?;
+    let provenance = SemanticSearchRuntimeProvenance::new(&input.toolchain_label);
+    let request = source_package_request(input.cache_root, &input.toolchain_label, &provenance)?;
+    with_materialized_source_package_with_writer(
+        &request,
+        writer_executable,
+        lock_timeout,
+        &cancelled,
+        |materialized, writer| {
+            let mut builder = CargoLeanCapability::new(&materialized.project_root, LIBRARY_NAME)
+                .package(MATERIALIZED_PACKAGE_NAME)
+                .module(LIBRARY_NAME)
+                .lean_sysroot(input.lean_sysroot);
+            for signature in export_signatures() {
+                builder = builder.export_signature(signature);
+            }
+            let built = builder
+                .build_quiet_with_writer(writer, &cancelled)
+                .map_err(|source| Error::Build {
+                    toolchain_label: input.toolchain_label,
+                    source,
+                })?;
+            Ok(SemanticSearchRuntime {
+                built: (&built).into(),
+                provenance,
             })
         },
     )
@@ -739,6 +790,58 @@ mod tests {
             .map_err(|error| error.to_string())?
             .project_root;
         assert!(path.join("lean-toolchain").is_file());
+        Ok(())
+    }
+
+    #[test]
+    fn supervised_build_cancellation_never_materializes_or_launches() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let result = super::build_cached_with_writer(
+            super::SemanticSearchRuntimeBuild {
+                cache_root: temp.path().to_path_buf(),
+                toolchain_label: "leanprover/lean4:v4.35.0".to_owned(),
+                lean_sysroot: temp.path().join("unused-sysroot"),
+            },
+            &temp.path().join("must-not-launch"),
+            std::time::Duration::from_secs(1),
+            || true,
+        );
+        assert!(matches!(
+            result,
+            Err(super::Error::SourcePackage {
+                source: lean_toolchain::SourcePackageError::Io { source, .. },
+            }) if source.kind() == std::io::ErrorKind::Interrupted
+        ));
+        let entries = fs::read_dir(temp.path().join(RUNTIME_SOURCE_DIGEST)).map_err(|error| error.to_string())?;
+        for entry in entries {
+            assert!(!entry.map_err(|error| error.to_string())?.path().is_dir());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn supervised_build_failed_admission_preserves_stale_source() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let label = "leanprover/lean4:v4.35.0".to_owned();
+        let package = materialize_source_package(SemanticSearchSourcePackageRequest {
+            cache_root: temp.path().to_path_buf(),
+            toolchain_label: label.clone(),
+        })
+        .map_err(|error| error.to_string())?;
+        let sentinel = package.project_root.join(SIDECAR_FILE_NAME);
+        fs::write(&sentinel, "active source must survive failed custody").map_err(|error| error.to_string())?;
+        let result = super::build_cached_with_writer(
+            super::SemanticSearchRuntimeBuild {
+                cache_root: temp.path().to_path_buf(),
+                toolchain_label: label,
+                lean_sysroot: temp.path().join("unused-sysroot"),
+            },
+            &temp.path().join("missing-helper"),
+            std::time::Duration::from_secs(1),
+            || false,
+        );
+        assert!(result.is_err(), "an absent helper cannot authorize mutation");
+        assert_eq!(read_string(&sentinel)?, "active source must survive failed custody");
         Ok(())
     }
 
