@@ -24,7 +24,14 @@ let runtime = build_cached(SemanticSearchRuntimeBuild {
 ```
 
 The cache entry is keyed by the runtime source digest and sanitized toolchain label. Callers own the cache root; this
-crate owns everything below it.
+crate owns everything below it. A build retains the source entry's external writer lock through materialization,
+compilation and artifact manifest publication. This prevents cooperative rematerialization from replacing a live build
+root. Lock contention has a 120-second default bound; `build_cached_with_lock_wait` accepts a cancellation observation
+and a custom budget. Neither interrupts a running Lake build. These controller-held locks do not establish descendant
+exit or survive controller failure; process-scope ownership remains separate.
+
+The additive lock API requires `lean-toolchain` 0.9.10, which must be published with this change before a registry-only
+downstream release. Local verification uses an external Cargo patch; no checkout paths belong in published manifests.
 
 ## Runtime Payload
 

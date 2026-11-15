@@ -12,8 +12,9 @@
     reason = "cache tests and digest accounting use bounded local path and byte counts"
 )]
 
-use std::fs::{self, File, OpenOptions};
+use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use lean_rs_worker_protocol::worker_exports::{
     doctor_signature, json_command_signature, metadata_signature, streaming_command_signature,
@@ -22,6 +23,7 @@ use lean_toolchain::{
     CargoLeanCapability, GeneratedSourceFile, LeanBuiltCapability, LeanBuiltCapabilityError, LeanExportSignature,
     LeanLibraryDependency, LinkDiagnostics, SourcePackageError, SourcePackageManifestPolicy,
     SourcePackageMaterializationRequest, materialize_source_package as materialize_with_toolchain,
+    with_materialized_source_package,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -212,25 +214,72 @@ pub enum Error {
 /// Returns [`Error`] when materialization, cache validation, or the explicit
 /// sysroot Lake build fails.
 pub fn build_cached(input: SemanticSearchRuntimeBuild) -> Result<SemanticSearchRuntime, Error> {
-    let package = materialize_source_package(SemanticSearchSourcePackageRequest {
-        cache_root: input.cache_root,
-        toolchain_label: input.toolchain_label.clone(),
-    })?;
-    let _build_lock = lock_runtime_build(&package.project_root)?;
-    let mut builder = CargoLeanCapability::new(&package.project_root, LIBRARY_NAME)
-        .package(MATERIALIZED_PACKAGE_NAME)
-        .module(LIBRARY_NAME)
-        .lean_sysroot(input.lean_sysroot);
-    for signature in export_signatures() {
-        builder = builder.export_signature(signature);
-    }
-    let built = builder.build_quiet().map_err(|source| Error::Build {
-        toolchain_label: input.toolchain_label,
-        source,
-    })?;
-    Ok(SemanticSearchRuntime {
-        built: (&built).into(),
-        provenance: package.provenance,
+    build_cached_with_lock_wait(input, Duration::from_secs(120), || false)
+}
+
+/// Build the runtime while bounding and cancelling waits for its writer locks.
+///
+/// One external source-entry lock covers materialization, Lake compilation and
+/// manifest publication, so concurrent rematerialization cannot replace the
+/// active build root. Both acquisitions share one elapsed-time wait budget;
+/// preparation time can reduce the second wait allowance.
+/// Cancellation skips work before lock acquisition; it does not interrupt Lake
+/// after the build starts. This lexical lock does not establish descendant exit
+/// or survive controller death on its own.
+///
+/// # Errors
+///
+/// Returns [`Error`] on cancellation, lock timeout, invalid runtime payload,
+/// materialization failure, or Lake build failure.
+pub fn build_cached_with_lock_wait(
+    input: SemanticSearchRuntimeBuild,
+    lock_timeout: Duration,
+    cancelled: impl Fn() -> bool,
+) -> Result<SemanticSearchRuntime, Error> {
+    let started = Instant::now();
+    with_source_package(
+        SemanticSearchSourcePackageRequest {
+            cache_root: input.cache_root,
+            toolchain_label: input.toolchain_label.clone(),
+        },
+        lock_timeout,
+        &cancelled,
+        |package| {
+            let mut builder = CargoLeanCapability::new(&package.project_root, LIBRARY_NAME)
+                .package(MATERIALIZED_PACKAGE_NAME)
+                .module(LIBRARY_NAME)
+                .lean_sysroot(input.lean_sysroot);
+            for signature in export_signatures() {
+                builder = builder.export_signature(signature);
+            }
+            let built = builder
+                .build_quiet_with_lock_wait(lock_timeout.saturating_sub(started.elapsed()), &cancelled)
+                .map_err(|source| Error::Build {
+                    toolchain_label: input.toolchain_label,
+                    source,
+                })?;
+            Ok(SemanticSearchRuntime {
+                built: (&built).into(),
+                provenance: package.provenance,
+            })
+        },
+    )
+}
+
+fn with_source_package<T>(
+    input: SemanticSearchSourcePackageRequest,
+    lock_timeout: Duration,
+    cancelled: impl Fn() -> bool,
+    use_package: impl FnOnce(SemanticSearchSourcePackage) -> Result<T, Error>,
+) -> Result<T, Error> {
+    ensure_runtime_payload_source(Path::new(RUNTIME_SOURCE_ROOT))?;
+    let provenance = SemanticSearchRuntimeProvenance::new(&input.toolchain_label);
+    let request = source_package_request(input.cache_root, &input.toolchain_label, &provenance)?;
+    with_materialized_source_package(&request, lock_timeout, cancelled, |materialized| {
+        use_package(SemanticSearchSourcePackage {
+            project_root: materialized.project_root,
+            provenance,
+        })
     })
 }
 
@@ -270,31 +319,6 @@ fn export_signatures() -> [LeanExportSignature; 5] {
         json_command_signature(lean_semantic_search_capability::PROOF_GOAL_FEATURES_EXPORT),
         streaming_command_signature(lean_semantic_search_capability::STREAM_DECLARATION_FEATURES_EXPORT),
     ]
-}
-
-struct BuildLock {
-    _file: File,
-}
-
-fn lock_runtime_build(project_root: &Path) -> Result<BuildLock, Error> {
-    let path = project_root.join(".semantic-search-runtime-build.lock");
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
-        .map_err(|source| Error::Io {
-            action: "open semantic-search runtime build lock",
-            path: path.clone(),
-            source,
-        })?;
-    fs4::FileExt::lock(&file).map_err(|source| Error::Io {
-        action: "lock semantic-search runtime build",
-        path,
-        source,
-    })?;
-    Ok(BuildLock { _file: file })
 }
 
 fn source_package_request(
@@ -678,6 +702,114 @@ mod tests {
             serde_json::from_str(&read_string(&second.project_root.join(SIDECAR_FILE_NAME))?)
                 .map_err(|error| error.to_string())?;
         assert_eq!(sidecar, second.provenance);
+        Ok(())
+    }
+
+    #[test]
+    fn runtime_build_cancelled_before_acquisition_never_materializes() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let result = super::build_cached_with_lock_wait(
+            super::SemanticSearchRuntimeBuild {
+                cache_root: temp.path().to_path_buf(),
+                toolchain_label: "leanprover/lean4:v4.35.0".to_owned(),
+                lean_sysroot: temp.path().join("unused-sysroot"),
+            },
+            std::time::Duration::from_secs(1),
+            || true,
+        );
+        assert!(matches!(
+            result,
+            Err(super::Error::SourcePackage {
+                source: lean_toolchain::SourcePackageError::Io { source, .. },
+            }) if source.kind() == std::io::ErrorKind::Interrupted
+        ));
+        let digest_root = temp.path().join(RUNTIME_SOURCE_DIGEST);
+        for entry in fs::read_dir(digest_root).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            assert!(!entry.path().is_dir(), "cancelled build must not materialize an entry");
+        }
+        let request = SemanticSearchSourcePackageRequest {
+            cache_root: temp.path().to_path_buf(),
+            toolchain_label: "leanprover/lean4:v4.35.0".to_owned(),
+        };
+        let provenance = SemanticSearchRuntimeProvenance::new(&request.toolchain_label);
+        let shared_request = super::source_package_request(request.cache_root, &request.toolchain_label, &provenance)
+            .map_err(|error| error.to_string())?;
+        let path = lean_toolchain::materialize_source_package(&shared_request)
+            .map_err(|error| error.to_string())?
+            .project_root;
+        assert!(path.join("lean-toolchain").is_file());
+        Ok(())
+    }
+
+    #[test]
+    fn active_runtime_build_transaction_prevents_root_replacement() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let input = SemanticSearchSourcePackageRequest {
+            cache_root: temp.path().to_path_buf(),
+            toolchain_label: "leanprover/lean4:v4.35.0".to_owned(),
+        };
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let owner_input = input.clone();
+        let owner = thread::spawn(move || {
+            super::with_source_package(
+                owner_input,
+                std::time::Duration::from_secs(1),
+                || false,
+                |package| {
+                    fs::write(package.project_root.join("active-build-marker"), b"building").map_err(|source| {
+                        super::Error::Io {
+                            action: "write regression marker",
+                            path: package.project_root.clone(),
+                            source,
+                        }
+                    })?;
+                    fs::write(package.project_root.join(SIDECAR_FILE_NAME), b"{}").map_err(|source| {
+                        super::Error::Io {
+                            action: "invalidate regression provenance",
+                            path: package.project_root.clone(),
+                            source,
+                        }
+                    })?;
+                    ready_tx
+                        .send(package.project_root)
+                        .map_err(|error| super::Error::InvalidRuntimePayload(error.to_string()))?;
+                    release_rx
+                        .recv_timeout(std::time::Duration::from_secs(3))
+                        .map_err(|error| super::Error::InvalidRuntimePayload(error.to_string()))?;
+                    Ok(())
+                },
+            )
+            .map_err(|error| error.to_string())
+        });
+        let active_root = ready_rx
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .map_err(|error| error.to_string())?;
+        let blocked = super::with_source_package(
+            input.clone(),
+            std::time::Duration::from_millis(30),
+            || false,
+            |_| Ok(()),
+        );
+        let timed_out = matches!(blocked,
+            Err(super::Error::SourcePackage {
+                source: lean_toolchain::SourcePackageError::Io { source, .. },
+            }) if source.kind() == std::io::ErrorKind::TimedOut
+        );
+        let marker_kept = active_root.join("active-build-marker").is_file();
+        release_tx.send(()).map_err(|error| error.to_string())?;
+        owner
+            .join()
+            .map_err(|_| "runtime transaction thread panicked".to_owned())??;
+        assert!(
+            timed_out,
+            "rematerialization must wait on the external transaction lock"
+        );
+        assert!(marker_kept, "active build root must not be replaced while locked");
+        let refreshed = materialize_source_package(input).map_err(|error| error.to_string())?;
+        assert_eq!(refreshed.project_root, active_root);
+        assert!(!refreshed.project_root.join("active-build-marker").exists());
         Ok(())
     }
 

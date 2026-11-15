@@ -247,15 +247,15 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "lean-rs-abi"
-version = "0.9.4"
+version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50d2ab69abf9b685c9d3c52a2a561c4b1dbb5de866deb6a0844ded52c4e194bd"
+checksum = "5dbe56f10fadc22280b383dae37d4d49976a8ce5067efb93eceb81caa6d7c4b2"
 
 [[package]]
 name = "lean-rs-worker-protocol"
-version = "0.9.4"
+version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6778d71329a65ffe572a808d3250af0d97d3c491a30f070d5b91b6b865d7b1a9"
+checksum = "049c4ce12c11736b69e3fad4258581bcce83e3500bce26aa9b9df648d9ea3643"
 dependencies = [
  "lean-toolchain",
  "serde",
@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-capability"
-version = "0.7.7"
+version = "0.7.8"
 dependencies = [
  "lean-semantic-search-contract",
  "serde_json",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-contract"
-version = "0.7.7"
+version = "0.7.8"
 dependencies = [
  "serde",
  "serde_json",
@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-retrieval"
-version = "0.7.7"
+version = "0.7.8"
 dependencies = [
  "lean-semantic-search-contract",
  "serde",
@@ -289,9 +289,8 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-runtime"
-version = "0.7.7"
+version = "0.7.8"
 dependencies = [
- "fs4",
  "lean-rs-worker-protocol",
  "lean-semantic-search-capability",
  "lean-toolchain",
@@ -305,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "lean-semantic-search-store"
-version = "0.7.7"
+version = "0.7.8"
 dependencies = [
  "dhat",
  "lean-semantic-search-contract",
@@ -316,9 +315,8 @@ dependencies = [
 
 [[package]]
 name = "lean-toolchain"
-version = "0.9.4"
+version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "041c960be76745c84d7059c84f878091fc6c6d61b7e17be5d96ae43bac93374e"
 dependencies = [
  "fs4",
  "lean-rs-abi",
