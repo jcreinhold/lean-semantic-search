@@ -17,7 +17,7 @@ use lean_semantic_search_runtime::{SemanticSearchRuntimeBuild, build_cached};
 
 let runtime = build_cached(SemanticSearchRuntimeBuild {
     cache_root: std::path::PathBuf::from("/tmp/semantic-runtime-cache"),
-    toolchain_label: "leanprover/lean4:v4.35.0".to_owned(),
+    toolchain_label: "leanprover/lean4:v4.36.0".to_owned(),
     lean_sysroot: std::path::PathBuf::from("/path/to/elan/toolchain"),
 })?;
 # Ok::<(), lean_semantic_search_runtime::Error>(())
@@ -33,9 +33,9 @@ exit or survive controller failure; process-scope ownership remains separate.
 The additive lock API requires `lean-toolchain` 0.9.10, which must be published with this change before a registry-only
 downstream release. Local verification uses an external Cargo patch; no checkout paths belong in published manifests.
 
-For a supervised host, use `build_cached_with_writer` with its explicit helper executable. This uses one writer
-scope for materialization, compilation and publication. Cancellation reaches the running command, and an unknown reply
-does not authorize another stage or a replay. Actual cleanup may outlast the caller's wait; the helper retains locks and
+For a supervised host, use `build_cached_with_writer` with its explicit helper executable. This uses one writer scope
+for materialization, compilation and publication. Cancellation reaches the running command, and an unknown reply does
+not authorize another stage or a replay. Actual cleanup may outlast the caller's wait; the helper retains locks and
 temporary resources while owned work remains unconfirmed. The helper protocol and lock domain must match the host's
 reader/writer contract. The older lexical APIs do not by themselves furnish this crash ownership guarantee.
 
