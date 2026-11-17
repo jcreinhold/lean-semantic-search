@@ -83,11 +83,11 @@ jobs:
         run: cargo nextest run --workspace --profile ci --locked
 
   msrv:
-    name: msrv (1.91)
+    name: msrv (1.94)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.91
+      - uses: dtolnay/rust-toolchain@1.94
       - uses: Swatinem/rust-cache@v2
       - name: cargo check
         run: cargo check --workspace --all-targets --locked
