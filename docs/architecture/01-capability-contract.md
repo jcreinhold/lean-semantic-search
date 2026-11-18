@@ -78,6 +78,9 @@ features from the selected goal's expressions and local declarations:
 }
 ```
 
+Feature request JSON objects must have unique keys, including nested objects and keys written with Unicode escapes.
+Duplicate keys return an empty `rows` array and a `lean_semantic_search.request.invalid` error diagnostic in the response.
+
 Declaration and proof-goal feature responses use the same envelope:
 
 ```json

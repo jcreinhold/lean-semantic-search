@@ -1,5 +1,5 @@
 import Lean
-import Lean.Server.InfoUtils
+import Lean.Elab.InfoTree.Util
 import LeanSemanticSearch.LeanCompat.Shape
 import LeanSemanticSearch.LeanCompat.Translate
 

@@ -227,6 +227,55 @@ private unsafe def testDiagnostics : IO Unit := do
   let missingDiagnostics ← arrField missing "diagnostics"
   require (!missingDiagnostics.isEmpty) "missing proof-goal source should return diagnostics"
 
+private def requireInvalidJsonResponse
+    (text command commandVersion : String) : IO Unit := do
+  let response ← parseJson text
+  require
+    ((← strField response "schema_version") == LeanSemanticSearch.JsonSupport.schemaVersion)
+    "invalid requests must retain the capability schema version"
+  require ((← strField response "command") == command) "invalid requests must retain the command"
+  require
+    ((← strField response "command_version") == commandVersion)
+    "invalid requests must retain the command version"
+  require
+    ((← strField response "feature_version") == LeanSemanticSearch.JsonSupport.semanticFeatureVersion)
+    "invalid requests must retain the feature version"
+  require (← arrField response "rows").isEmpty "invalid requests must return no feature rows"
+  let diagnostics ← arrField response "diagnostics"
+  require (diagnostics.size == 1) "invalid requests must return one diagnostic"
+  let some diagnostic := diagnostics[0]? | fail "missing invalid-request diagnostic"
+  require ((← strField diagnostic "severity") == "error") "invalid requests must report an error"
+  require
+    ((← strField diagnostic "code") == "lean_semantic_search.request.invalid")
+    "invalid requests must report the request diagnostic code"
+  require
+    ((← strField diagnostic "message").startsWith "could not parse request JSON:")
+    "duplicate keys must be rejected by the JSON parser before request validation"
+
+-- Lean 4.36 rejects duplicate JSON object keys, including nested and escaped
+-- keys. Both feature exports must keep these parser failures in the envelope.
+private unsafe def testDuplicateJsonKeys : IO Unit := do
+  let declarationRequests :=
+    #[ r#"{"modules":[{"module":"Init"}],"modules":[{"module":"Init"}]}"#
+     , r#"{"modules":[{"module":"Init","module":"Init"}]}"#
+     , r#"{"modules":[{"module":"Init"}],"\u006dodules":[{"module":"Init"}]}"#
+     ]
+  for request in declarationRequests do
+    requireInvalidJsonResponse
+      (← LeanSemanticSearch.Capability.declarationFeatures request)
+      LeanSemanticSearch.JsonSupport.declarationCommand
+      LeanSemanticSearch.JsonSupport.declarationFeatureCommandVersion
+  let goalRequests :=
+    #[ r#"{"module":"DuplicateKeysGoal","module":"DuplicateKeysGoal","source_text":"import Init\n\ntheorem t : True := by\n  trivial","declaration":"t"}"#
+     , r#"{"module":"DuplicateKeysGoal","source_text":"import Init\n\ntheorem t : True := by\n  trivial","declaration":"t","position":{"line":4,"line":4,"column":3}}"#
+     , r#"{"module":"DuplicateKeysGoal","\u006dodule":"DuplicateKeysGoal","source_text":"import Init\n\ntheorem t : True := by\n  trivial","declaration":"t"}"#
+     ]
+  for request in goalRequests do
+    requireInvalidJsonResponse
+      (← LeanSemanticSearch.Capability.proofGoalFeatures request)
+      LeanSemanticSearch.JsonSupport.proofGoalCommand
+      LeanSemanticSearch.JsonSupport.proofGoalFeatureCommandVersion
+
 unsafe def main (_args : List String) : IO UInt32 := do
   Lean.enableInitializersExecution
   initSearchPath (← getBuildDir)
@@ -239,6 +288,7 @@ unsafe def main (_args : List String) : IO UInt32 := do
   testProofGoalFeatures
   testProofGoalFeaturesPreservesAmbientSearchPath
   testDiagnostics
+  testDuplicateJsonKeys
   pure 0
 
 end LeanSemanticSearchTest
