@@ -32,10 +32,10 @@ const SIDECAR_FILE_NAME: &str = "semantic-search-runtime.json";
 const CACHE_SCHEMA_VERSION: u32 = 1;
 
 /// Runtime source revision packaged by this crate.
-pub const SOURCE_REVISION: &str = "f504ad7616de785fe5cbf6f9d41684f9bd552e23";
+pub const SOURCE_REVISION: &str = "cc0ab8215d99b050ea9a98f15348aa2bd50bc4ae";
 /// Digest of the runtime Lean payload, using the file-set rule in
 /// `lean/VENDORING.md`.
-pub const RUNTIME_SOURCE_DIGEST: &str = "ff539a6d213411332bf3231bae4985567c6c04813b61b4a3ff9bf67630ee35dc";
+pub const RUNTIME_SOURCE_DIGEST: &str = "cd1dc009159d1d466f845840f837d5fc9478a92562e383031af6124d3d10ce3a";
 /// Lake package name owned by the runtime payload.
 pub const PACKAGE_NAME: &str = "lean-semantic-search";
 const MATERIALIZED_PACKAGE_NAME: &str = "lean_semantic_search";
