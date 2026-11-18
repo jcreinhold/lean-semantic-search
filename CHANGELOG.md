@@ -10,6 +10,15 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.7.8]
+
+### Changed
+
+- Updated the pinned Lean toolchain to `leanprover/lean4:v4.36.0`. Feature requests on Lean 4.36 reject duplicate JSON
+  keys, including nested and Unicode-escaped keys, through the existing invalid-request diagnostic.
+- Updated the packaged Lean source and raised the worker protocol and toolchain dependency requirements to 0.9.10.
+  The Rust CI minimum-version job now uses the declared minimum of 1.94.
+
 ## [0.7.7]
 
 ### Changed
