@@ -36,10 +36,7 @@ limits, saturation diagnostics—becomes its own crate once that behavior exists
 
 The runtime crate hides package-owned capability distribution. Downstream hosts ask for a built `LeanSemanticSearch`
 capability for a specific toolchain/sysroot; they do not copy `lean/`, reconstruct source digests, or decide which Lean
-files ship at runtime. Its source-entry writer lock lives outside the replaceable package root and covers the complete
-materialization, Lake build and artifact publication transaction. Generic filesystem locking stays in `lean-toolchain`;
-the runtime chooses the package transaction. It does not infer process-tree completion from lock release, and
-cancellation of lock contention is distinct from stopping a running build.
+files ship at runtime.
 
 ## What Must Not Leak
 

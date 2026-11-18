@@ -11,6 +11,7 @@ rust-version = { workspace = true }
 version = { workspace = true }
 
 [dependencies]
+fs4 = { workspace = true }
 lean-rs-worker-protocol = { workspace = true }
 lean-semantic-search-capability = { workspace = true }
 lean-toolchain = { workspace = true }
