@@ -121,3 +121,19 @@ locally. Numeric casts and float arithmetic are explicitly allowed for this doma
 Workspace dependencies are centralized in the root `Cargo.toml` `[workspace.dependencies]`. Prefer major-only version
 requirements for crates with a stable major (`serde = "1"`). Keep path dependencies in the workspace table so member
 crates inherit one version and path.
+
+## Storage and evidence limits
+
+- Keep no evidence by default. When a result changes a release or maintainer decision, keep one short Git-tracked
+  summary: revision, exact check, outcome, and first error needed to act. Do not retain raw logs or traces.
+- Before any task writes outputs, name the canonical paths, total byte limit, owner, next named check, and expiry. Keep
+  task outputs within this checkout. Do not use `~/Documents/Codex`, `/private/tmp` (including `/tmp`), or `.git` for
+  non-Git data. Do not evade limits with alternate paths, aliases, archives, compression, or split files.
+- Use installed Elan toolchains and one normal build cache. Do not copy toolchains, targets, or checkouts as evidence.
+  If a check cannot meet these limits, stop and report the conflict rather than create another storage location.
+- Delete generated task outputs when no next named check owns them, after confirming no live work needs them. Preserve
+  active inputs and unique source. Measure allocated bytes before and after cleanup; report retained paths, bytes,
+  owners, and expiry. A command succeeding is not proof that cleanup happened.
+- Prove Git blob checks with small passing and oversized failing cases, including renamed and partially staged files,
+  before claiming enforcement. If the gate is absent or untested, say so. Git checks do not bound ignored or untracked
+  output: enforce and measure those limits at the writer. These rules do not authorize a new storage service.
