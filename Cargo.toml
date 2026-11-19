@@ -6,7 +6,6 @@ resolver = "3"
 authors = ["Jacob Reinhold"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
-readme = "README.md"
 repository = "https://github.com/jcreinhold/lean-semantic-search"
 rust-version = "1.94"
 version = "0.7.8"
@@ -30,16 +29,16 @@ walkdir = "2"
 dhat = "0.3"
 
 [workspace.lints.rust]
-future-incompatible = "warn"
-let-underscore = "warn"
-nonstandard-style = "warn"
+future_incompatible = "warn"
+let_underscore = "warn"
+nonstandard_style = "warn"
 redundant_lifetimes = "warn"
-rust-2018-idioms = "warn"
-rust-2024-compatibility = "deny"
+rust_2018_idioms = "warn"
+rust_2024_compatibility = "deny"
 single_use_lifetimes = "warn"
 trivial_casts = "warn"
 unreachable_pub = "warn"
-unsafe-code = "forbid"
+unsafe_code = "forbid"
 unused = { level = "warn", priority = -1 }
 
 [workspace.lints.clippy]
