@@ -4,8 +4,7 @@
 # This is the local mirror of `.github/workflows/release.yml`: it runs
 # the same gates as the `verify` job (fmt, clippy, rustdoc, nextest,
 # cargo-deny, lake build/test, runtime vendoring) plus the `publish` job's preflight checks
-# (tag/version ↔ CHANGELOG consistency and a `cargo publish --workspace
-# --dry-run`), and the docs/toml policy checks `ci.yml` runs
+# (tag/version ↔ CHANGELOG consistency and verified workspace packaging), and the docs/toml policy checks `ci.yml` runs
 # (actionlint, mdwright, taplo). Run it before tagging a `vX.Y.Z`
 # release so CI surprises become local failures.
 #
@@ -18,7 +17,7 @@
 #
 # Usage:
 #   scripts/prerelease.sh                # all gates
-#   scripts/prerelease.sh --quick        # skip the slow `cargo publish` dry-run
+#   scripts/prerelease.sh --quick        # skip verified workspace packaging
 #   scripts/prerelease.sh --no-publish   # alias for --quick
 #   scripts/prerelease.sh --help
 
@@ -26,7 +25,7 @@ set -euo pipefail
 
 # -- defaults ---------------------------------------------------------------
 
-RUN_PUBLISH=1
+RUN_PACKAGE=1
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # The crate whose version anchors the tag check; all workspace crates
@@ -67,7 +66,7 @@ usage() {
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--quick | --no-publish)
-		RUN_PUBLISH=0
+		RUN_PACKAGE=0
 		shift
 		;;
 	-h | --help)
@@ -205,13 +204,13 @@ else
 	SKIPPED+=("mdwright fmt --check")
 fi
 
-# -- publish dry-run (slow; network-bound) ----------------------------------
+# -- verify all package tarballs (requires published external dependencies) ---
 
-if [[ "$RUN_PUBLISH" == 1 ]]; then
-	run_gate "cargo publish --workspace --dry-run" \
-		cargo publish --workspace --dry-run --locked
+if [[ "$RUN_PACKAGE" == 1 ]]; then
+	run_gate "cargo package --workspace --locked" \
+		cargo package --workspace --locked
 else
-	SKIPPED+=("cargo publish --workspace --dry-run (--quick)")
+	SKIPPED+=("cargo package --workspace --locked (--quick)")
 fi
 
 # -- summary ----------------------------------------------------------------

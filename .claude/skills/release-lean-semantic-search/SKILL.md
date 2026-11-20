@@ -11,13 +11,14 @@ skill is the checklist plus the cross-file invariants CI only catches *after* yo
 versions are **immutable**, so a botched publish burns a version permanently.
 
 **Publishing happens only in CI.** Pushing a `vX.Y.Z` git tag fires `release.yml`, which re-runs the full gate, asserts
-the tag matches the workspace version, extracts the CHANGELOG section, then runs `cargo publish --workspace --locked`
-and opens the GitHub Release. NEVER run `cargo publish` locally to release, NEVER use `--allow-dirty`. Rehearse the
-whole pipeline without uploading by running `release.yml` via `workflow_dispatch` with `dry_run: true`.
+the tag matches the workspace version, extracts the CHANGELOG section, then verifies
+`cargo package --workspace --locked`, runs `cargo publish --workspace --locked`, and opens the GitHub Release. NEVER run
+`cargo publish` locally to release, NEVER use `--allow-dirty`. Rehearse the whole pipeline without uploading by running
+`release.yml` via `workflow_dispatch` with `dry_run: true`.
 
-Every publishable workspace member publishes together and shares one workspace version. The publishable set is every
-member under `[workspace]` whose package does not set `publish = false`; `cargo publish --workspace` publishes exactly
-that set, in the dependency order cargo computes. Do not assume a count or a fixed list — derive it:
+Every current workspace member is publishable and shares one workspace version. Cargo computes dependency order for
+workspace packaging and publishing. If adding a `publish = false` member, explicitly exclude it from package/publish
+selection; `cargo package --workspace` also verifies private members. Derive the intended publishable set:
 
 ```sh
 # members that will publish (everything without `publish = false`)
@@ -25,7 +26,8 @@ cargo metadata --no-deps --format-version 1 \
   | python3 -c 'import json,sys; m=json.load(sys.stdin); print(*(p["name"] for p in m["packages"] if p.get("publish") != []), sep="\n")'
 ```
 
-If a member must never reach crates.io, give it `publish = false` so the gate's dry-run excludes it; otherwise it ships.
+A member that must never reach crates.io needs `publish = false` and matching explicit package selection in the gates.
+See [the verified mechanics and limits](../../../docs/release-checks.md).
 
 ## Steps
 
@@ -35,12 +37,14 @@ before running it.**
 ### 1. Pre-flight gate
 
 ```sh
-scripts/prerelease.sh            # mirrors release.yml's verify job + the publish preflight; --quick skips the publish dry-run
+scripts/prerelease.sh            # mirrors release.yml; --quick skips verified workspace packaging
 ```
 
 Stop on any failure. This runs the same gates as CI — `lake build`/`lake test`, the runtime-vendoring check,
 `cargo fmt`/`clippy -D warnings`/`nextest`/`deny`, the CHANGELOG consistency check, and (without `--quick`) a
-`cargo publish --workspace --dry-run`. Use `--quick` only for fast iteration, never as the actual release gate.
+`cargo package --workspace --locked`. This builds all tarballs against Cargo's temporary sibling registry without
+uploads or publish credentials. External SDK dependencies must already resolve from crates.io; no local override or
+`--no-verify` substitutes for that check. Use `--quick` only for iteration, never as the release gate.
 
 ### 2. Version bump (the workspace version is the one source of truth)
 
@@ -118,17 +122,20 @@ Tags containing `-` (e.g. `vX.Y.Z-rc1`) are auto-marked prerelease and are not m
 
 crates.io versions are immutable, so the fix depends on *why* it failed. This repo has no dedicated recovery workflow.
 
-**Partial publish** — some crates uploaded, the rest did not (often the tail crate losing cargo's index-propagation
-race). The crate *contents* are fine; only the upload is incomplete. Do **not** bump the version and do **not** re-tag —
-a re-run of `cargo publish --workspace` rejects the already-published crates with `already exists`. Publish only the
-missing crates by hand, in dependency order, once the index has settled:
+**Partial publish** — confirm the actual crates.io versions first: an index timeout can follow a successful upload. If
+contents are unchanged, do not bump or re-tag. Workspace publishing is not an idempotent retry of existing versions.
+Dispatch this workflow at the **same existing release tag**, selecting only the missing workspace crates:
 
 ```sh
-cargo publish -p <crate> --locked   # one per missing crate, in dependency order
+gh workflow run release.yml --ref vX.Y.Z -f dry_run=false -f 'packages=missing-crate-a missing-crate-b'
 ```
 
-`cargo publish --workspace --dry-run` prints the order cargo uses — a crate publishes only after the crates it depends
-on. Follow that order for the missing ones.
+The workflow re-runs verification and full tarball packaging, validates the tag/version and selection before uploading,
+and gives Cargo the missing `--package` arguments; Cargo computes dependency order. Unknown, private and duplicate names
+are refused. Leave `packages` empty for a fresh full-workspace release. Rehearsal always packages the full workspace,
+regardless of this recovery selection. Publish credentials are supplied only to the live upload step. Manual recovery
+does not create a GitHub Release; after confirming all uploads, finish the release through the normal GitHub process.
+Publishing remains CI-only; do not run a local upload as a recovery shortcut.
 
 **Contents must change** — a genuine build break, not a propagation race. Bump the patch version, repeat steps 2–5, and
 re-tag at the new merge commit; the already-published crates keep their old version.

@@ -11,10 +11,14 @@ on:
         description: "Run all gates but skip the live crates.io publish and GitHub Release."
         type: boolean
         default: false
+      packages:
+        description: "Recovery only: missing crate names separated by spaces; empty publishes the workspace."
+        type: string
+        default: ""
 
 # One release at a time; cancelling mid-publish would waste immutable crate versions.
 concurrency:
-  group: release-${{ github.ref }}
+  group: publish-lean-semantic-search
   cancel-in-progress: false
 
 env:
@@ -79,7 +83,7 @@ jobs:
             | sh -s -- -y --default-toolchain "$(cat lean/lean-toolchain)"
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       - name: Verify tag matches workspace version
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || inputs.dry_run != true
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
@@ -108,15 +112,40 @@ jobs:
           echo "--- Release body ---"
           cat release-body.md
           echo "--- End release body ---"
+      # Verify every tarball before the first upload, using Cargo's temporary
+      # registry for unpublished siblings. External SDK crates must be published.
+      - name: Verify workspace packages without uploading
+        run: cargo package --workspace --locked
+
       - name: Publish workspace to crates.io
+        if: inputs.dry_run != true
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          PUBLISH_PACKAGES: ${{ inputs.packages }}
         run: |
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            cargo publish --workspace --dry-run --locked
-          else
-            cargo publish --workspace --locked
+          set -euo pipefail
+          selected=$(cargo metadata --no-deps --format-version 1 --locked \
+            | python3 -c '
+          import json, os, sys
+          metadata = json.load(sys.stdin)
+          members = set(metadata["workspace_members"])
+          publishable = {p["name"] for p in metadata["packages"] if p["id"] in members and p.get("publish") != []}
+          requested = os.environ.get("PUBLISH_PACKAGES", "").split()
+          unknown = set(requested) - publishable
+          if unknown:
+              sys.exit("Unknown or unpublishable workspace packages: " + ", ".join(sorted(unknown)))
+          if len(requested) != len(set(requested)):
+              sys.exit("Duplicate workspace package selection")
+          print(*requested, sep="\n")
+          ')
+          args=(--workspace)
+          if [[ -n "$selected" ]]; then
+            args=()
+            while IFS= read -r package; do
+              args+=("--package=$package")
+            done <<< "$selected"
           fi
+          cargo publish "${args[@]}" --locked
       - name: Create GitHub Release
         if: inputs.dry_run != true && github.event_name == 'push'
         uses: softprops/action-gh-release@v3
