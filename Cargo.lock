@@ -279,6 +279,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f22283810c059e3480cbe2b6471c68b15027d268e5ce954af08676d8e576fc85"
 
 [[package]]
+name = "lean-rs-worker-parent"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d5c89975fe10b294e5435f6a916856e59010a8fec658a0c4e2ec6bdcdf61cb3"
+dependencies = [
+ "lean-rs-worker-protocol",
+ "lean-toolchain",
+ "libc",
+ "mach2",
+ "rustix",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lean-rs-worker-protocol"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -309,7 +324,11 @@ dependencies = [
 name = "lean-semantic-search-retrieval"
 version = "0.7.8"
 dependencies = [
+ "lean-rs-worker-parent",
+ "lean-rs-worker-protocol",
+ "lean-semantic-search-capability",
  "lean-semantic-search-contract",
+ "lean-toolchain",
  "serde",
  "serde_json",
 ]
@@ -398,6 +417,12 @@ checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
 dependencies = [
  "scopeguard",
 ]
+
+[[package]]
+name = "mach2"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
 
 [[package]]
 name = "memchr"

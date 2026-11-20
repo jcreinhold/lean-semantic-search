@@ -11,6 +11,7 @@ rust-version = "1.94"
 version = "0.7.8"
 
 [workspace.dependencies]
+lean-rs-worker-parent = { version = "0.10.0" }
 lean-rs-worker-protocol = { version = "0.10.0" }
 lean-semantic-search-capability = { path = "crates/capability", version = "0.7.8" }
 lean-semantic-search-contract = { path = "crates/contract", version = "0.7.8" }

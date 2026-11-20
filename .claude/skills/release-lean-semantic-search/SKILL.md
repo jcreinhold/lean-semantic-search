@@ -47,6 +47,10 @@ on any failure. This runs the same gates as CI — `lake build`/`lake test`, the
 uploads or publish credentials. External SDK dependencies must already resolve from crates.io; no local override or
 `--no-verify` substitutes for that check. Use `--quick` only for iteration, never as the release gate.
 
+For runtime or SDK changes, also run the [native search smoke](../../../crates/retrieval/README.md#native-release-smoke)
+with a matching application-owned worker and the actual published SDK graph. It checks source-backed search, changed
+source refusal and confirmed worker closure; SDK/private authority fixture results alone do not replace that gate.
+
 ### 2. Version bump (the workspace version is the one source of truth)
 
 Pick the new `X.Y.Z` (patch unless the change is breaking or adds a feature — pre-1.0, so both bump the minor). The
