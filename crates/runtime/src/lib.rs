@@ -12,16 +12,20 @@
     reason = "cache tests and digest accounting use bounded local path and byte counts"
 )]
 
-use std::fs::{self, File, OpenOptions};
+use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use lean_rs_worker_protocol::worker_exports::{
     doctor_signature, json_command_signature, metadata_signature, streaming_command_signature,
 };
+#[cfg(unix)]
+use lean_toolchain::with_materialized_source_package_with_writer;
 use lean_toolchain::{
     CargoLeanCapability, GeneratedSourceFile, LeanBuiltCapability, LeanBuiltCapabilityError, LeanExportSignature,
     LeanLibraryDependency, LinkDiagnostics, SourcePackageError, SourcePackageManifestPolicy,
     SourcePackageMaterializationRequest, materialize_source_package as materialize_with_toolchain,
+    with_materialized_source_package,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -45,7 +49,8 @@ pub const LIBRARY_NAME: &str = "LeanSemanticSearch";
 /// Request to build the packaged runtime for one Lean toolchain.
 ///
 /// `cache_root` is caller-owned. This crate owns the layout below it, keyed by
-/// source digest and requested toolchain label.
+/// source digest and requested toolchain label, with a separate linked cache
+/// for each selected macOS sysroot.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SemanticSearchRuntimeBuild {
     /// Caller-owned cache root.
@@ -207,30 +212,118 @@ pub enum Error {
 
 /// Build the packaged semantic-search runtime capability for one toolchain.
 ///
+/// The SDK source-entry transaction covers materialization, Lake work and
+/// capability-manifest publication. This convenience API uses the SDK's writer
+/// selection and a shared 120-second lock-admission budget. The lexical entry
+/// lock alone does not retain custody after controller death. Hosts requiring
+/// that custody use `build_cached_with_writer` on Unix.
+///
 /// # Errors
 ///
 /// Returns [`Error`] when materialization, cache validation, or the explicit
 /// sysroot Lake build fails.
 pub fn build_cached(input: SemanticSearchRuntimeBuild) -> Result<SemanticSearchRuntime, Error> {
-    let package = materialize_source_package(SemanticSearchSourcePackageRequest {
-        cache_root: input.cache_root,
-        toolchain_label: input.toolchain_label.clone(),
-    })?;
-    let _build_lock = lock_runtime_build(&package.project_root)?;
-    let mut builder = CargoLeanCapability::new(&package.project_root, LIBRARY_NAME)
+    let started = Instant::now();
+    let lock_timeout = Duration::from_secs(120);
+    let linked = LinkedBuild::new(input.lean_sysroot, cfg!(target_os = "macos"))?;
+    with_source_package(
+        SemanticSearchSourcePackageRequest {
+            cache_root: input.cache_root,
+            toolchain_label: input.toolchain_label.clone(),
+        },
+        Some(&linked),
+        lock_timeout.saturating_sub(started.elapsed()),
+        || false,
+        |package| {
+            let built = capability_builder(&package.project_root, &linked.sysroot)
+                .build_quiet_with_lock_wait(lock_timeout.saturating_sub(started.elapsed()), || false)
+                .map_err(|source| Error::Build {
+                    toolchain_label: input.toolchain_label,
+                    source,
+                })?;
+            Ok(SemanticSearchRuntime {
+                built: (&built).into(),
+                provenance: package.provenance,
+            })
+        },
+    )
+}
+
+/// Build with a caller-selected SDK shared-writer helper.
+///
+/// The helper acknowledges custody of the source-entry and project locks
+/// before materialization and retains it through Lake work and publication.
+/// The callback uses that same writer, avoiding a nested helper. The caller
+/// must select an executable implementing the SDK shared-writer protocol;
+/// this function does not grant permission to load or query the result.
+///
+/// `lock_timeout` bounds admission, not the whole request. Cancellation stops
+/// further stages and requests SDK-owned command cleanup. An unavailable result
+/// does not authorize replay. Typed SDK errors retain execution disposition and
+/// any stop receipt; unknown cleanup remains unknown.
+///
+/// # Errors
+///
+/// Returns [`Error`] on admission, cancellation, materialization or build
+/// failure. The original SDK failure remains available through its source chain.
+#[cfg(unix)]
+pub fn build_cached_with_writer(
+    input: SemanticSearchRuntimeBuild,
+    writer_executable: &Path,
+    lock_timeout: Duration,
+    cancelled: impl Fn() -> bool,
+) -> Result<SemanticSearchRuntime, Error> {
+    let started = Instant::now();
+    ensure_runtime_payload_source(Path::new(RUNTIME_SOURCE_ROOT))?;
+    let provenance = SemanticSearchRuntimeProvenance::new(&input.toolchain_label);
+    let linked = LinkedBuild::new(input.lean_sysroot, cfg!(target_os = "macos"))?;
+    let request = source_package_request(input.cache_root, &input.toolchain_label, &provenance, Some(&linked))?;
+    with_materialized_source_package_with_writer(
+        &request,
+        writer_executable,
+        lock_timeout.saturating_sub(started.elapsed()),
+        &cancelled,
+        |materialized, writer| {
+            let built = capability_builder(&materialized.project_root, &linked.sysroot)
+                .build_quiet_with_writer(writer, &cancelled)
+                .map_err(|source| Error::Build {
+                    toolchain_label: input.toolchain_label,
+                    source,
+                })?;
+            Ok(SemanticSearchRuntime {
+                built: (&built).into(),
+                provenance,
+            })
+        },
+    )
+}
+
+fn capability_builder(project_root: &Path, sysroot: &Path) -> CargoLeanCapability {
+    let mut builder = CargoLeanCapability::new(project_root, LIBRARY_NAME)
         .package(MATERIALIZED_PACKAGE_NAME)
         .module(LIBRARY_NAME)
-        .lean_sysroot(input.lean_sysroot);
+        .lean_sysroot(sysroot);
     for signature in export_signatures() {
         builder = builder.export_signature(signature);
     }
-    let built = builder.build_quiet().map_err(|source| Error::Build {
-        toolchain_label: input.toolchain_label,
-        source,
-    })?;
-    Ok(SemanticSearchRuntime {
-        built: (&built).into(),
-        provenance: package.provenance,
+    builder
+}
+
+fn with_source_package<T>(
+    input: SemanticSearchSourcePackageRequest,
+    linked: Option<&LinkedBuild>,
+    lock_timeout: Duration,
+    cancelled: impl Fn() -> bool,
+    use_package: impl FnOnce(SemanticSearchSourcePackage) -> Result<T, Error>,
+) -> Result<T, Error> {
+    ensure_runtime_payload_source(Path::new(RUNTIME_SOURCE_ROOT))?;
+    let provenance = SemanticSearchRuntimeProvenance::new(&input.toolchain_label);
+    let request = source_package_request(input.cache_root, &input.toolchain_label, &provenance, linked)?;
+    with_materialized_source_package(&request, lock_timeout, cancelled, |materialized| {
+        use_package(SemanticSearchSourcePackage {
+            project_root: materialized.project_root,
+            provenance,
+        })
     })
 }
 
@@ -242,9 +335,16 @@ pub fn build_cached(input: SemanticSearchRuntimeBuild) -> Result<SemanticSearchR
 pub fn materialize_source_package(
     input: SemanticSearchSourcePackageRequest,
 ) -> Result<SemanticSearchSourcePackage, Error> {
+    materialize_source_package_for_build(input, None)
+}
+
+fn materialize_source_package_for_build(
+    input: SemanticSearchSourcePackageRequest,
+    linked: Option<&LinkedBuild>,
+) -> Result<SemanticSearchSourcePackage, Error> {
     ensure_runtime_payload_source(Path::new(RUNTIME_SOURCE_ROOT))?;
     let provenance = SemanticSearchRuntimeProvenance::new(&input.toolchain_label);
-    let request = source_package_request(input.cache_root, &input.toolchain_label, &provenance)?;
+    let request = source_package_request(input.cache_root, &input.toolchain_label, &provenance, linked)?;
     let materialized = materialize_with_toolchain(&request)?;
     Ok(SemanticSearchSourcePackage {
         project_root: materialized.project_root,
@@ -272,36 +372,74 @@ fn export_signatures() -> [LeanExportSignature; 5] {
     ]
 }
 
-struct BuildLock {
-    _file: File,
+struct LinkedBuild {
+    sysroot: PathBuf,
+    runpath_literal: Option<String>,
 }
 
-fn lock_runtime_build(project_root: &Path) -> Result<BuildLock, Error> {
-    let path = project_root.join(".semantic-search-runtime-build.lock");
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
-        .map_err(|source| Error::Io {
-            action: "open semantic-search runtime build lock",
-            path: path.clone(),
+impl LinkedBuild {
+    fn new(sysroot: PathBuf, needs_runpath: bool) -> Result<Self, Error> {
+        if !needs_runpath {
+            return Ok(Self {
+                sysroot,
+                runpath_literal: None,
+            });
+        }
+        let sysroot = fs::canonicalize(&sysroot).map_err(|source| Error::Io {
+            action: "resolve selected Lean sysroot",
+            path: sysroot,
             source,
         })?;
-    fs4::FileExt::lock(&file).map_err(|source| Error::Io {
-        action: "lock semantic-search runtime build",
-        path,
-        source,
-    })?;
-    Ok(BuildLock { _file: file })
+        let library_dir = sysroot.join("lib/lean");
+        let action = "select Lean runtime library directory";
+        let metadata = fs::metadata(&library_dir).map_err(|source| Error::Io {
+            action,
+            path: library_dir.clone(),
+            source,
+        })?;
+        let Some(path) = library_dir
+            .to_str()
+            .filter(|path| metadata.is_dir() && !path.chars().any(char::is_control))
+        else {
+            return Err(Error::Io {
+                action,
+                path: library_dir,
+                source: std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "expected a directory path representable as a Lean string literal",
+                ),
+            });
+        };
+        // With control characters rejected, JSON and Lean string literals use
+        // the same spelling for quotes, backslashes and the remaining Unicode.
+        let runpath_literal = Some(serde_json::Value::String(path.to_owned()).to_string());
+        Ok(Self {
+            sysroot,
+            runpath_literal,
+        })
+    }
+
+    fn cache_root(&self, root: &Path) -> PathBuf {
+        if self.runpath_literal.is_none() {
+            return root.to_path_buf();
+        }
+        let digest = hex_lower(&Sha256::digest(self.sysroot.as_os_str().as_encoded_bytes()));
+        root.join(format!("darwin-runpath-v1-{digest}"))
+    }
 }
 
 fn source_package_request(
     cache_root: PathBuf,
     toolchain_label: &str,
     provenance: &SemanticSearchRuntimeProvenance,
+    linked: Option<&LinkedBuild>,
 ) -> Result<SourcePackageMaterializationRequest, Error> {
+    let cache_root = if let Some(build) = linked {
+        build.cache_root(&cache_root)
+    } else {
+        cache_root
+    };
+    let runpath_literal = linked.and_then(|build| build.runpath_literal.as_deref());
     Ok(SourcePackageMaterializationRequest {
         source_root: PathBuf::from(RUNTIME_SOURCE_ROOT),
         cache_root,
@@ -317,7 +455,7 @@ fn source_package_request(
         generated_files: vec![
             GeneratedSourceFile {
                 relative_path: PathBuf::from("lakefile.lean"),
-                contents: materialized_lakefile_bytes()?,
+                contents: materialized_lakefile_bytes(runpath_literal)?,
             },
             GeneratedSourceFile {
                 relative_path: PathBuf::from("lake-manifest.json"),
@@ -379,14 +517,24 @@ fn ensure_zero_package_manifest(path: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-fn materialized_lakefile_bytes() -> Result<Vec<u8>, Error> {
+fn materialized_lakefile_bytes(runpath_literal: Option<&str>) -> Result<Vec<u8>, Error> {
     let lakefile = Path::new(RUNTIME_SOURCE_ROOT).join("lakefile.lean");
     let lakefile_text = read_to_string(&lakefile, "read materialized semantic-search lakefile")?;
     let rewritten = lakefile_text.replace(
         "package «lean-semantic-search» where",
         "package lean_semantic_search where",
     );
-    Ok(rewritten.into_bytes())
+    let Some(runpath_literal) = runpath_literal else {
+        return Ok(rewritten.into_bytes());
+    };
+    let anchor = "lean_lib LeanSemanticSearch where\n";
+    if rewritten.matches(anchor).count() != 1 {
+        return Err(Error::InvalidRuntimePayload(
+            "expected exactly one LeanSemanticSearch library definition in the packaged lakefile".to_owned(),
+        ));
+    }
+    let config = format!("{anchor}  moreLinkArgs := #[\"-Xlinker\", \"-rpath\", \"-Xlinker\", {runpath_literal}]\n");
+    Ok(rewritten.replacen(anchor, &config, 1).into_bytes())
 }
 
 fn materialized_manifest_bytes() -> Result<Vec<u8>, Error> {
@@ -565,6 +713,88 @@ mod tests {
         fs::read_to_string(path).map_err(|error| error.to_string())
     }
 
+    fn fake_sysroot(path: PathBuf) -> Result<PathBuf, String> {
+        fs::create_dir_all(path.join("lib/lean")).map_err(|error| error.to_string())?;
+        Ok(path)
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn linked_cache_uses_canonical_sysroot_and_preserves_source_provenance() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let first = fake_sysroot(temp.path().join(r#"Lean with spaces, "quotes" and \slash"#))?;
+        let second = fake_sysroot(temp.path().join("other Lean"))?;
+        let cache = temp.path().join("cache");
+        let label = "leanprover/lean4:v4.36.0";
+        let provenance = SemanticSearchRuntimeProvenance::new(label);
+        let first_linked = super::LinkedBuild::new(first.clone(), true).map_err(|error| error.to_string())?;
+        let alias = first.join("lib/..");
+        let alias_linked = super::LinkedBuild::new(alias, true).map_err(|error| error.to_string())?;
+        let second_linked = super::LinkedBuild::new(second, true).map_err(|error| error.to_string())?;
+        assert_eq!(
+            first_linked.sysroot,
+            first.canonicalize().map_err(|error| error.to_string())?
+        );
+        assert_eq!(first_linked.cache_root(&cache), alias_linked.cache_root(&cache));
+        assert_ne!(first_linked.cache_root(&cache), second_linked.cache_root(&cache));
+
+        let request = super::source_package_request(cache, label, &provenance, Some(&first_linked))
+            .map_err(|error| error.to_string())?;
+        let materialized = lean_toolchain::materialize_source_package(&request).map_err(|error| error.to_string())?;
+        let config = read_string(&materialized.project_root.join("lakefile.lean"))?;
+        let literal = config
+            .lines()
+            .find_map(|line| line.strip_prefix("  moreLinkArgs := #[\"-Xlinker\", \"-rpath\", \"-Xlinker\", "))
+            .and_then(|line| line.strip_suffix(']'))
+            .ok_or_else(|| "missing generated link argument".to_owned())?;
+        let decoded: String = serde_json::from_str(literal).map_err(|error| error.to_string())?;
+        assert_eq!(Path::new(&decoded), first_linked.sysroot.join("lib/lean"));
+
+        let sidecar: SemanticSearchRuntimeProvenance =
+            serde_json::from_str(&read_string(&materialized.project_root.join(SIDECAR_FILE_NAME))?)
+                .map_err(|error| error.to_string())?;
+        assert_eq!(sidecar, provenance);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn linked_sysroot_rejects_invalid_inputs_and_leaves_source_only_unchanged() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let missing = temp.path().join("missing");
+        assert!(matches!(
+            super::LinkedBuild::new(missing.clone(), true),
+            Err(super::Error::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound
+        ));
+        assert!(matches!(
+            super::LinkedBuild::new(temp.path().to_path_buf(), true),
+            Err(super::Error::Io { path, source, .. })
+                if path.ends_with("lib/lean") && source.kind() == std::io::ErrorKind::NotFound
+        ));
+        let invalid = fake_sysroot(temp.path().join("path\nwith control"))?;
+        assert!(matches!(
+            super::LinkedBuild::new(invalid, true),
+            Err(super::Error::Io { source, .. }) if source.kind() == std::io::ErrorKind::InvalidInput
+        ));
+
+        let non_macos = super::LinkedBuild::new(missing.clone(), false).map_err(|error| error.to_string())?;
+        assert_eq!(non_macos.sysroot, missing);
+        let cache = temp.path().join("cache");
+        let label = "leanprover/lean4:v4.36.0";
+        let provenance = SemanticSearchRuntimeProvenance::new(label);
+        let unlinked = super::source_package_request(cache.clone(), label, &provenance, None)
+            .map_err(|error| error.to_string())?;
+        let linked = super::source_package_request(cache.clone(), label, &provenance, Some(&non_macos))
+            .map_err(|error| error.to_string())?;
+        assert_eq!(unlinked.cache_root, cache);
+        assert_eq!(linked.cache_root, cache);
+        let source = lean_toolchain::materialize_source_package(&unlinked).map_err(|error| error.to_string())?;
+        let other = lean_toolchain::materialize_source_package(&linked).map_err(|error| error.to_string())?;
+        assert_eq!(source.project_root, other.project_root);
+        assert!(!read_string(&source.project_root.join("lakefile.lean"))?.contains("moreLinkArgs"));
+        Ok(())
+    }
+
     #[test]
     fn runtime_source_digest_matches_recorded_value() -> Result<(), String> {
         let digest = compute_runtime_source_digest().map_err(|error| error.to_string())?;
@@ -678,6 +908,233 @@ mod tests {
             serde_json::from_str(&read_string(&second.project_root.join(SIDECAR_FILE_NAME))?)
                 .map_err(|error| error.to_string())?;
         assert_eq!(sidecar, second.provenance);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn supervised_build_cancellation_never_materializes_or_launches() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let result = super::build_cached_with_writer(
+            super::SemanticSearchRuntimeBuild {
+                cache_root: temp.path().to_path_buf(),
+                toolchain_label: "leanprover/lean4:v4.35.0".to_owned(),
+                lean_sysroot: fake_sysroot(temp.path().join("unused-sysroot"))?,
+            },
+            &temp.path().join("must-not-launch"),
+            std::time::Duration::from_secs(1),
+            || true,
+        );
+        assert!(matches!(
+            result,
+            Err(super::Error::SourcePackage {
+                source: lean_toolchain::SourcePackageError::Io { source, .. },
+            }) if source.kind() == std::io::ErrorKind::Interrupted
+        ));
+        let linked = super::LinkedBuild::new(temp.path().join("unused-sysroot"), cfg!(target_os = "macos"))
+            .map_err(|error| error.to_string())?;
+        let entries = fs::read_dir(linked.cache_root(temp.path()).join(RUNTIME_SOURCE_DIGEST))
+            .map_err(|error| error.to_string())?;
+        for entry in entries {
+            assert!(!entry.map_err(|error| error.to_string())?.path().is_dir());
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn supervised_build_failed_admission_preserves_stale_source() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let label = "leanprover/lean4:v4.35.0".to_owned();
+        let sysroot = fake_sysroot(temp.path().join("unused-sysroot"))?;
+        let linked =
+            super::LinkedBuild::new(sysroot.clone(), cfg!(target_os = "macos")).map_err(|error| error.to_string())?;
+        let provenance = SemanticSearchRuntimeProvenance::new(&label);
+        let request = super::source_package_request(temp.path().to_path_buf(), &label, &provenance, Some(&linked))
+            .map_err(|error| error.to_string())?;
+        let package = lean_toolchain::materialize_source_package(&request).map_err(|error| error.to_string())?;
+        let sentinel = package.project_root.join(SIDECAR_FILE_NAME);
+        fs::write(&sentinel, "active source must survive failed custody").map_err(|error| error.to_string())?;
+        let result = super::build_cached_with_writer(
+            super::SemanticSearchRuntimeBuild {
+                cache_root: temp.path().to_path_buf(),
+                toolchain_label: label,
+                lean_sysroot: sysroot,
+            },
+            &temp.path().join("missing-helper"),
+            std::time::Duration::from_secs(1),
+            || false,
+        );
+        assert!(result.is_err(), "an absent helper cannot authorize mutation");
+        assert_eq!(read_string(&sentinel)?, "active source must survive failed custody");
+        Ok(())
+    }
+
+    #[test]
+    fn active_runtime_build_transaction_prevents_root_replacement() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let input = SemanticSearchSourcePackageRequest {
+            cache_root: temp.path().to_path_buf(),
+            toolchain_label: "leanprover/lean4:v4.35.0".to_owned(),
+        };
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let owner_input = input.clone();
+        let owner = thread::spawn(move || {
+            super::with_source_package(
+                owner_input,
+                None,
+                std::time::Duration::from_secs(1),
+                || false,
+                |package| {
+                    fs::write(package.project_root.join("active-build-marker"), b"building").map_err(|source| {
+                        super::Error::Io {
+                            action: "write regression marker",
+                            path: package.project_root.clone(),
+                            source,
+                        }
+                    })?;
+                    fs::write(package.project_root.join(SIDECAR_FILE_NAME), b"{}").map_err(|source| {
+                        super::Error::Io {
+                            action: "invalidate regression provenance",
+                            path: package.project_root.clone(),
+                            source,
+                        }
+                    })?;
+                    ready_tx
+                        .send(package.project_root)
+                        .map_err(|error| super::Error::InvalidRuntimePayload(error.to_string()))?;
+                    release_rx
+                        .recv_timeout(std::time::Duration::from_secs(3))
+                        .map_err(|error| super::Error::InvalidRuntimePayload(error.to_string()))?;
+                    Ok(())
+                },
+            )
+            .map_err(|error| error.to_string())
+        });
+        let active = ready_rx.recv_timeout(std::time::Duration::from_secs(3));
+        let (timed_out, marker_kept) = if let Ok(active_root) = &active {
+            let blocked = super::with_source_package(
+                input.clone(),
+                None,
+                std::time::Duration::from_millis(30),
+                || false,
+                |_| Ok(()),
+            );
+            let timed_out = matches!(blocked,
+                Err(super::Error::SourcePackage {
+                    source: lean_toolchain::SourcePackageError::Io { source, .. },
+                }) if source.kind() == std::io::ErrorKind::TimedOut
+            );
+            (timed_out, active_root.join("active-build-marker").is_file())
+        } else {
+            (false, false)
+        };
+        // Release and join before propagating observations or asserting them.
+        let release = release_tx.send(());
+        let owner_result = owner.join();
+        let active_root = active.map_err(|error| error.to_string())?;
+        release.map_err(|error| error.to_string())?;
+        owner_result.map_err(|_| "runtime transaction thread panicked".to_owned())??;
+        assert!(
+            timed_out,
+            "rematerialization must wait on the external transaction lock"
+        );
+        assert!(marker_kept, "active build root must not be replaced while locked");
+        let refreshed = materialize_source_package(input).map_err(|error| error.to_string())?;
+        assert_eq!(refreshed.project_root, active_root);
+        assert!(!refreshed.project_root.join("active-build-marker").exists());
+        Ok(())
+    }
+
+    fn writer_failure<'a>(
+        error: &'a (dyn std::error::Error + 'static),
+    ) -> Option<&'a lean_toolchain::shared_writer::WriterFailure> {
+        let mut current = Some(error);
+        while let Some(source) = current {
+            if let Some(failure) = source.downcast_ref::<lean_toolchain::shared_writer::WriterFailure>() {
+                return Some(failure);
+            }
+            if let Some(failure) = source
+                .downcast_ref::<std::io::Error>()
+                .and_then(lean_toolchain::shared_writer::WriterFailure::from_io)
+            {
+                return Some(failure);
+            }
+            current = source.source();
+        }
+        None
+    }
+
+    #[test]
+    fn sdk_writer_failures_retain_disposition_and_stop_receipt() -> Result<(), String> {
+        use lean_toolchain::shared_writer::{WriterDisposition, WriterFailure};
+        for disposition in [
+            WriterDisposition::NotStarted,
+            WriterDisposition::Stopped,
+            WriterDisposition::Unknown,
+        ] {
+            let expected = WriterFailure {
+                disposition,
+                detail: "original SDK failure".to_owned(),
+                stop_receipt: (disposition == WriterDisposition::Stopped)
+                    .then(|| serde_json::json!({"opaque_test_stop_receipt": {"retained": true}})),
+            };
+            let source_error = super::Error::from(lean_toolchain::SourcePackageError::Io {
+                action: "test source failure",
+                path: PathBuf::from("source"),
+                source: std::io::Error::other(expected.clone()),
+            });
+            let build_error = super::Error::Build {
+                toolchain_label: "test".to_owned(),
+                source: lean_toolchain::LinkDiagnostics::LakeWriterFailure {
+                    project_root: PathBuf::from("source"),
+                    target_name: LIBRARY_NAME.to_owned(),
+                    failure: Box::new(expected.clone()),
+                },
+            };
+            for error in [source_error, build_error] {
+                let actual =
+                    writer_failure(&error).ok_or_else(|| "SDK execution evidence lost in source chain".to_owned())?;
+                assert_eq!(actual, &expected);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn source_transaction_preserves_original_callback_failure() -> Result<(), String> {
+        use lean_toolchain::shared_writer::{WriterDisposition, WriterFailure};
+        let temp = temp_cache()?;
+        let expected = WriterFailure {
+            disposition: WriterDisposition::Unknown,
+            detail: "original build result unavailable".to_owned(),
+            stop_receipt: None,
+        };
+        let result: Result<(), super::Error> = super::with_source_package(
+            SemanticSearchSourcePackageRequest {
+                cache_root: temp.path().to_path_buf(),
+                toolchain_label: "leanprover/lean4:v4.36.0".to_owned(),
+            },
+            None,
+            std::time::Duration::from_secs(1),
+            || false,
+            |_| {
+                Err(super::Error::Build {
+                    toolchain_label: "leanprover/lean4:v4.36.0".to_owned(),
+                    source: lean_toolchain::LinkDiagnostics::LakeWriterFailure {
+                        project_root: temp.path().to_path_buf(),
+                        target_name: LIBRARY_NAME.to_owned(),
+                        failure: Box::new(expected.clone()),
+                    },
+                })
+            },
+        );
+        let error = result
+            .err()
+            .ok_or_else(|| "callback failure became success".to_owned())?;
+        let actual = writer_failure(&error).ok_or_else(|| "callback execution evidence lost".to_owned())?;
+        assert_eq!(actual, &expected);
         Ok(())
     }
 

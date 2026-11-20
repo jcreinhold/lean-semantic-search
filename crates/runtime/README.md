@@ -23,8 +23,25 @@ let runtime = build_cached(SemanticSearchRuntimeBuild {
 # Ok::<(), lean_semantic_search_runtime::Error>(())
 ```
 
-The cache entry is keyed by the runtime source digest and sanitized toolchain label. Callers own the cache root; this
-crate owns everything below it.
+The cache entry is keyed by the runtime source digest and sanitized toolchain label. On macOS, linked builds also
+separate canonical sysroot paths and generate a library runpath to the selected sysroot's `lib/lean` directory. Callers
+own the cache root; this crate owns everything below it.
+
+Hosts that already own the SDK shared-writer executable use `build_cached_with_writer` on Unix. Pass an explicitly
+selected absolute helper path, an admission timeout, and a cancellation predicate. The same helper acknowledges entry
+and project lock custody before materialization, runs Lake, and retains custody through artifact publication. It must
+implement the matching SDK shared-writer protocol. These build APIs provide no load or query authority and do not own
+worker sessions.
+
+`build_cached` remains available and uses the SDK's writer selection. Its source-entry transaction covers the whole
+build and publication; its lexical entry lock alone does not survive controller death. Source-only
+`materialize_source_package` remains available for downstream Lake dependencies and starts no writer or compiler.
+
+Admission timeout is not a whole-request deadline. Cancellation asks the SDK to stop owned work. Errors preserve typed
+SDK failures, including execution disposition and any validated stop receipt. A missing result is not permission to
+retry, and unknown cleanup must not be treated as confirmed retirement. Consumers recover writer evidence from the error
+source chain, including `WriterFailure::from_io` for a `SourcePackageError::Io` source. The returned capability keeps
+its SDK manifest, package/module identity, and initializer descriptor; loading and retirement belong to the host.
 
 ## Runtime Payload
 
@@ -42,9 +59,9 @@ The packaged payload lives under `runtime/` and mirrors the runtime subset of th
 It excludes test modules, executable drivers, build outputs, and the upstream `lean/lean-toolchain`. Downstream
 materialization always generates a fresh `lean-toolchain` from the caller's requested toolchain label.
 
-The materialized cache entry rewrites only Lake package metadata from the source package name `lean-semantic-search` to
-the loader-safe identifier `lean_semantic_search` before building. The source payload and runtime provenance remain tied
-to the recorded source revision and digest.
+Materialization rewrites Lake package metadata from `lean-semantic-search` to the loader-safe identifier
+`lean_semantic_search`. A macOS linked build also generates its selected sysroot runpath; source-only materialization
+keeps the original link configuration. The source payload and provenance retain their recorded revision and digest.
 
 ## Checks
 
@@ -55,3 +72,10 @@ cargo test -p lean-semantic-search-runtime
 cargo package --list -p lean-semantic-search-runtime
 scripts/check-runtime-vendoring.sh
 ```
+
+The ignored `build_cached_against_explicit_sysroot` integration test uses an absolute
+`LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT` and absolute SDK-compatible `LEAN_HOST_MCP_WRITER_EXECUTABLE`. It makes cold and
+warm calls against one temporary cache and compares provenance. Run it only with an allocated native build lane and a
+matching reviewed helper; the normal Rust tests do not compile or load Lean. A failed or incomplete native build retains
+its cache and typed SDK error. Confirm writer retirement before removing that cache. This build check alone does not
+validate capability loading or search.

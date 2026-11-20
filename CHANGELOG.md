@@ -16,6 +16,10 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 - Updated the pinned Lean toolchain to `leanprover/lean4:v4.36.0`. Feature requests on Lean 4.36 reject duplicate JSON
   keys through the existing invalid-request diagnostic.
+- Use the published lean-rs 0.10.0 SDK. Runtime builds retain source-entry custody through artifact publication and
+  expose an explicit shared-writer API with typed cancellation and cleanup failures.
+- Keep macOS linked runtime caches separate by canonical sysroot and supply that sysroot's library runpath.
+- Update bundled SQLite through rusqlite 0.41 to address RUSTSEC-2026-0459.
 
 ## [0.7.7]
 
@@ -28,8 +32,8 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ### Internal
 
-- Allowed the new `clippy::assert_is_empty` lint (Rust 1.99) workspace-wide; its suggested
-  `assert_eq!(x, [] as [T; 0])` rewrite is less readable than `assert!(x.is_empty())`.
+- Allowed the new `clippy::assert_is_empty` lint (Rust 1.99) workspace-wide; its suggested `assert_eq!(x, [] as [T; 0])`
+  rewrite is less readable than `assert!(x.is_empty())`.
 
 ## [0.7.6]
 
@@ -48,8 +52,8 @@ must have a corresponding `## [X.Y.Z]` section here.
 - Bumped the pinned Lean toolchain to `leanprover/lean4:v4.35.0-rc2` and raised the `lean-rs-worker-protocol` and
   `lean-toolchain` requirements to `0.9.1`, the first `lean-rs` release whose supported window includes 4.35.0-rc2
   (`lean-toolchain` 0.9.0's build script rejects that toolchain's `lean.h`). The Lean package compiles unchanged. No
-  public API of this workspace changed. (`runtime_source_digest` moved only because this release's unified version
-  bump touches `lean/lakefile.lean`, which is part of the vendored runtime payload.)
+  public API of this workspace changed. (`runtime_source_digest` moved only because this release's unified version bump
+  touches `lean/lakefile.lean`, which is part of the vendored runtime payload.)
 
 ### Internal
 
@@ -63,8 +67,8 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 - Updated dependencies: `lean-rs-worker-protocol` and `lean-toolchain` moved to the crates.io `0.9` requirements, and
   `Cargo.lock` was refreshed onto the published crates. No public API of this workspace changed.
-  (`runtime_source_digest` moved because this release's unified version bump touches `lean/lakefile.lean`, which is
-  part of the vendored runtime payload.)
+  (`runtime_source_digest` moved because this release's unified version bump touches `lean/lakefile.lean`, which is part
+  of the vendored runtime payload.)
 
 ## [0.7.3]
 
@@ -73,43 +77,42 @@ must have a corresponding `## [X.Y.Z]` section here.
 - Adopted the `lean-rs` 0.8.0 release: the temporary local path dependencies on `lean-rs-worker-protocol` and
   `lean-toolchain` (introduced for cpu_millis development) are replaced by the crates.io `0.8` requirements, and
   `Cargo.lock` is refreshed onto the published 0.8.0 crates. No public API of this workspace changed.
-  (`runtime_source_digest` moved because this release's unified version bump touches `lean/lakefile.lean`, which is
-  part of the vendored runtime payload.)
+  (`runtime_source_digest` moved because this release's unified version bump touches `lean/lakefile.lean`, which is part
+  of the vendored runtime payload.)
 
 ## [0.7.2]
 
 ### Changed
 
 - Bumped the Lean toolchain pin to `leanprover/lean4:v4.34.0-rc2`, newly in the supported toolchain window of the
-  `lean-rs` 0.7.3 release. The Lean package compiles unchanged under the new toolchain; the vendored runtime payload
-  and `runtime_source_digest` are untouched. Only the cosmetic `toolchain_label` test/doc literals in
+  `lean-rs` 0.7.3 release. The Lean package compiles unchanged under the new toolchain; the vendored runtime payload and
+  `runtime_source_digest` are untouched. Only the cosmetic `toolchain_label` test/doc literals in
   `lean-semantic-search-runtime` were refreshed. The `lean-rs` 0.7 line was already adopted in this workspace
   (`lean-rs-worker-protocol` and `lean-toolchain` at `"0.7"`), so no `deny.toml` floor change rides along.
-  (`runtime_source_digest` moved only because this release's unified version bump touches `lean/lakefile.lean`,
-  which is part of the vendored runtime payload.)
+  (`runtime_source_digest` moved only because this release's unified version bump touches `lean/lakefile.lean`, which is
+  part of the vendored runtime payload.)
 
 ### Internal
 
-- Refreshed `Cargo.lock` onto `lean-rs` 0.7.3, within the existing `"0.7"` requirements; the published crates'
-  version requirements are unchanged. lean-rs 0.7.3 raises its MSRV to Rust 1.94, which this workspace already
-  declares (`rust-version = "1.94"`); the stale `1.91` mentions in `AGENTS.md` and `README.md` were corrected to
-  match.
+- Refreshed `Cargo.lock` onto `lean-rs` 0.7.3, within the existing `"0.7"` requirements; the published crates' version
+  requirements are unchanged. lean-rs 0.7.3 raises its MSRV to Rust 1.94, which this workspace already declares
+  (`rust-version = "1.94"`); the stale `1.91` mentions in `AGENTS.md` and `README.md` were corrected to match.
 
 ## [0.7.1]
 
 ### Changed
 
-- Bumped the Lean toolchain pin to `leanprover/lean4:v4.34.0-rc1`, the toolchain the `lean-rs` 0.7 line builds
-  against. The Lean package compiles unchanged under the new toolchain; the vendored runtime payload is untouched.
-  Only the cosmetic `toolchain_label` test/doc literals in `lean-semantic-search-runtime` were refreshed. The
-  `lean-rs` 0.7 line was already adopted in this workspace (`lean-rs-worker-protocol` and `lean-toolchain` at
-  `"0.7"`), so no dependency or `deny.toml` floor change rides along. (`runtime_source_digest` moved only because
-  this release's unified version bump touches `lean/lakefile.lean`, which is part of the vendored runtime payload.)
+- Bumped the Lean toolchain pin to `leanprover/lean4:v4.34.0-rc1`, the toolchain the `lean-rs` 0.7 line builds against.
+  The Lean package compiles unchanged under the new toolchain; the vendored runtime payload is untouched. Only the
+  cosmetic `toolchain_label` test/doc literals in `lean-semantic-search-runtime` were refreshed. The `lean-rs` 0.7 line
+  was already adopted in this workspace (`lean-rs-worker-protocol` and `lean-toolchain` at `"0.7"`), so no dependency or
+  `deny.toml` floor change rides along. (`runtime_source_digest` moved only because this release's unified version bump
+  touches `lean/lakefile.lean`, which is part of the vendored runtime payload.)
 
 ### Internal
 
-- Refreshed `Cargo.lock` onto `lean-rs` 0.7.2 (`lean-rs-worker-protocol`, `lean-toolchain`, `lean-rs-abi`), within
-  the existing `"0.7"` requirements; the published crates' version requirements are unchanged.
+- Refreshed `Cargo.lock` onto `lean-rs` 0.7.2 (`lean-rs-worker-protocol`, `lean-toolchain`, `lean-rs-abi`), within the
+  existing `"0.7"` requirements; the published crates' version requirements are unchanged.
 
 ## [0.7.0]
 
@@ -117,13 +120,12 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 - Bumped the Lean toolchain pin to `leanprover/lean4:v4.33.0-rc2` and advanced onto the `lean-rs` 0.7 line:
   `lean-rs-worker-protocol` and `lean-toolchain` pins move from `"0.6"` to `"0.7"`. lean-rs 0.7.0 adds Lean 4.32.2 and
-  4.33.0-rc2 to its supported toolchain window (both share the byte-identical `lean.h` ABI of their preceding
-  compatible releases); the wire protocol is unchanged, so no contract or runtime behavior this package consumes
-  changes, but the lean-rs types re-exported in this package's public API must stay on one lean-rs line downstream
-  (`lean-host-mcp`). The Lean package compiles unchanged under the new toolchain; only the cosmetic
-  `toolchain_label` test/doc literals in `lean-semantic-search-runtime` were refreshed. (`runtime_source_digest` moved
-  only because this release's unified version bump touches `lean/lakefile.lean`, which is part of the vendored runtime
-  payload.)
+  4.33.0-rc2 to its supported toolchain window (both share the byte-identical `lean.h` ABI of their preceding compatible
+  releases); the wire protocol is unchanged, so no contract or runtime behavior this package consumes changes, but the
+  lean-rs types re-exported in this package's public API must stay on one lean-rs line downstream (`lean-host-mcp`). The
+  Lean package compiles unchanged under the new toolchain; only the cosmetic `toolchain_label` test/doc literals in
+  `lean-semantic-search-runtime` were refreshed. (`runtime_source_digest` moved only because this release's unified
+  version bump touches `lean/lakefile.lean`, which is part of the vendored runtime payload.)
 
 ### Internal
 
@@ -135,23 +137,21 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ### Changed
 
-- Advanced onto the `lean-rs` 0.6 line: `lean-rs-worker-protocol` and `lean-toolchain` pins move
-  from `"0.5"` to `"0.6"`. lean-rs 0.6.0 adds pool-staleness eviction, byte-bounded import residue,
-  and independent session-pool capacity in the worker stack; the wire protocol is unchanged
-  (`PROTOCOL_VERSION` stays 10), so no contract or runtime behavior this package consumes changes,
-  but the lean-rs types re-exported in this package's public API must stay on one lean-rs line
-  downstream (`lean-host-mcp`). The minor bump carries that coupling.
+- Advanced onto the `lean-rs` 0.6 line: `lean-rs-worker-protocol` and `lean-toolchain` pins move from `"0.5"` to
+  `"0.6"`. lean-rs 0.6.0 adds pool-staleness eviction, byte-bounded import residue, and independent session-pool
+  capacity in the worker stack; the wire protocol is unchanged (`PROTOCOL_VERSION` stays 10), so no contract or runtime
+  behavior this package consumes changes, but the lean-rs types re-exported in this package's public API must stay on
+  one lean-rs line downstream (`lean-host-mcp`). The minor bump carries that coupling.
 
 ## [0.5.0]
 
 ### Changed
 
-- Advanced onto the `lean-rs` 0.5 line: `lean-rs-worker-protocol` and `lean-toolchain` pins move
-  from `"0.4"` to `"0.5"`. lean-rs 0.5.0 adds `entry_goals`/`locals` to
-  `LeanWorkerProofAttemptEnvelope` (additive, serde-defaulted) and repairs the host shim's
-  declaration-candidate scan; neither changes the contract or runtime behavior this package
-  consumes, but the lean-rs types re-exported in this package's public API must stay on one
-  lean-rs line downstream (`lean-host-mcp`). The minor bump carries that coupling.
+- Advanced onto the `lean-rs` 0.5 line: `lean-rs-worker-protocol` and `lean-toolchain` pins move from `"0.4"` to
+  `"0.5"`. lean-rs 0.5.0 adds `entry_goals`/`locals` to `LeanWorkerProofAttemptEnvelope` (additive, serde-defaulted) and
+  repairs the host shim's declaration-candidate scan; neither changes the contract or runtime behavior this package
+  consumes, but the lean-rs types re-exported in this package's public API must stay on one lean-rs line downstream
+  (`lean-host-mcp`). The minor bump carries that coupling.
 
 
 ## [0.4.3]
