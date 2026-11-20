@@ -27,7 +27,6 @@ cargo metadata --no-deps --format-version 1 \
 ```
 
 A member that must never reach crates.io needs `publish = false` and matching explicit package selection in the gates.
-See [the verified mechanics and limits](../../../docs/release-checks.md).
 
 ## Steps
 
@@ -37,10 +36,12 @@ before running it.**
 ### 1. Pre-flight gate
 
 ```sh
-scripts/prerelease.sh            # mirrors release.yml; --quick skips verified workspace packaging
+mkdir -p target/tmp
+TMPDIR="$PWD/target/tmp" ELAN_TOOLCHAIN="$(cat lean/lean-toolchain)" scripts/prerelease.sh
 ```
 
-Stop on any failure. This runs the same gates as CI — `lake build`/`lake test`, the runtime-vendoring check,
+Select the installed Lean pin without changing Elan defaults, and keep temporary check outputs inside the checkout. Stop
+on any failure. This runs the same gates as CI — `lake build`/`lake test`, the runtime-vendoring check,
 `cargo fmt`/`clippy -D warnings`/`nextest`/`deny`, the CHANGELOG consistency check, and (without `--quick`) a
 `cargo package --workspace --locked`. This builds all tarballs against Cargo's temporary sibling registry without
 uploads or publish credentials. External SDK dependencies must already resolve from crates.io; no local override or

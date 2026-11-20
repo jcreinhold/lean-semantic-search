@@ -121,8 +121,11 @@ jobs:
         # elan resolves the toolchain from the working directory, not from
         # lake's `-d` argument, so set the default from lean/lean-toolchain.
         run: |
+          set -euo pipefail
+          lean_toolchain="$(cat lean/lean-toolchain)"
           curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
-            | sh -s -- -y --default-toolchain "$(cat lean/lean-toolchain)"
+            | sh -s -- -y --default-toolchain "$lean_toolchain"
+          "$HOME/.elan/bin/elan" toolchain install "$lean_toolchain"
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       - name: lake build
         run: lake -d lean build
