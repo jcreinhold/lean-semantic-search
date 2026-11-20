@@ -134,6 +134,17 @@ private unsafe def testDeclarationFeatures : IO Unit := do
     (!response.compress.contains "raw_expr")
     "declaration feature response must not expose raw expressions"
 
+  -- Omission discovers declarations; an explicit empty selector is intentional
+  -- selection of none (used by downstream callers with a computed empty scope).
+  let emptyRequest := Json.mkObj
+    [ ("modules", ← objField request "modules")
+    , ("include_generated", Json.bool true)
+    , ("declaration_ids", Json.arr #[])
+    ]
+  let emptyResponse ← parseJson (← LeanSemanticSearch.Capability.declarationFeatures emptyRequest.compress)
+  require (← arrField emptyResponse "rows").isEmpty "explicit empty declaration selection must return no rows"
+  require (← arrField emptyResponse "diagnostics").isEmpty "empty selection is valid, not an error"
+
 private unsafe def compileSentinelModule (dir : System.FilePath) (moduleName : Name) : IO Unit := do
   let stem := moduleName.toString
   let sourcePath := (dir / stem).withExtension "lean"

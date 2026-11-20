@@ -163,7 +163,11 @@ pub struct SourceSpan {
 pub struct DeclarationFeatureRequest {
     /// Modules whose imported environments should be available to extraction.
     pub modules: Vec<ModuleSpec>,
-    /// Optional declaration identifiers to extract. Empty means all eligible declarations.
+    /// Optional declaration identifiers to extract.
+    ///
+    /// An empty vector omits the wire selector and discovers all eligible declarations.
+    /// Explicit JSON `[]` selects none; this discovery-oriented DTO does not emit it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub declaration_ids: Vec<String>,
 }
 
@@ -322,7 +326,10 @@ pub struct StreamSummary {
 mod tests {
     use serde_json::{Value, json, to_value};
 
-    use super::{CapabilityFact, CapabilityMetadata, CommandMetadata, Diagnostic, DiagnosticSeverity, DoctorReport};
+    use super::{
+        CapabilityFact, CapabilityMetadata, CommandMetadata, DeclarationFeatureRequest, Diagnostic, DiagnosticSeverity,
+        DoctorReport, ModuleSpec,
+    };
 
     #[test]
     fn metadata_serializes_to_generic_worker_shape() -> Result<(), String> {
@@ -385,6 +392,46 @@ mod tests {
                 .and_then(Value::as_str),
             Some("test")
         );
+        Ok(())
+    }
+
+    fn declaration_request() -> DeclarationFeatureRequest {
+        DeclarationFeatureRequest {
+            modules: vec![ModuleSpec {
+                module: "Example.Basic".to_owned(),
+                origin: None,
+                source_root: None,
+            }],
+            declaration_ids: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn declaration_discovery_omits_selector_and_accepts_omission() -> serde_json::Result<()> {
+        let request = declaration_request();
+        let value = to_value(&request)?;
+        assert!(
+            value.get("declaration_ids").is_none(),
+            "discovery must omit the selector; [] selects no declarations"
+        );
+        let decoded: DeclarationFeatureRequest = serde_json::from_value(value)?;
+        assert_eq!(decoded, request);
+        Ok(())
+    }
+
+    #[test]
+    fn declaration_selection_preserves_nonempty_ids() -> serde_json::Result<()> {
+        let mut request = declaration_request();
+        request
+            .declaration_ids
+            .push("workspace:Example.Basic:Example.target".to_owned());
+        let value = to_value(&request)?;
+        assert_eq!(
+            value.get("declaration_ids"),
+            Some(&json!(["workspace:Example.Basic:Example.target"]))
+        );
+        let decoded: DeclarationFeatureRequest = serde_json::from_value(value)?;
+        assert_eq!(decoded, request);
         Ok(())
     }
 

@@ -53,12 +53,14 @@ The doctor reports a passing boundary check and a passing feature-availability c
 
 ## Feature Commands
 
-Declaration requests identify imported modules and may restrict extraction to known declaration ids:
+Declaration requests identify imported modules and may restrict extraction to known declaration ids. Omit
+`declaration_ids` (or send `null`) to discover all eligible declarations. A nonempty array selects those known ids; an
+explicit empty array selects none. The Rust `DeclarationFeatureRequest` omits its empty vector for discovery and accepts
+an omitted selector when deserializing, preserving the existing downstream discovery behavior.
 
 ```json
 {
   "modules": [{ "module": "My.Project.Module", "origin": "workspace", "source_root": "/repo" }],
-  "declaration_ids": [],
   "include_private": false,
   "include_generated": false
 }

@@ -21,6 +21,11 @@ must have a corresponding `## [X.Y.Z]` section here.
 - Keep macOS linked runtime caches separate by canonical sysroot and supply that sysroot's library runpath.
 - Update bundled SQLite through rusqlite 0.41 to address RUSTSEC-2026-0459.
 
+### Fixed
+
+- Empty Rust declaration selectors now omit the optional JSON field for discovery. Explicit JSON empty arrays still
+  select no declarations, preserving intentional empty scopes in downstream callers.
+
 ## [0.7.7]
 
 ### Changed
