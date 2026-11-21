@@ -12,9 +12,9 @@ Hosted callers must install Lean's module search path before invoking capability
 elaborate against the current search path; they do not call `initSearchPath` or rebuild from `LEAN_PATH`. The standalone
 test driver is the local caller that initializes a search path for `lake -d lean test`.
 
-A separately supervised Lean process can instead call `GoalElaboration.runWithSetup` with the exact
-`Lean.ModuleSetup` obtained from Lake for the requested module. It returns the same feature rows or structured error
-as `GoalElaboration.run`, using the same request parser and goal selectors, while honoring Lake's options, import
+A separately supervised Lean process can instead call `GoalElaboration.runWithSetup` with the exact `Lean.ModuleSetup`
+obtained from Lake for the requested module. It returns the same feature rows or structured error as
+`GoalElaboration.run`, using the same request parser and goal selectors, while honoring Lake's options, import
 artifacts, dynlibs and plugins. The caller holds the selected inputs and native images through process closure and
 preserves the working directory for relative setup paths. This Lean-only API adds no FFI export or JSON setup field.
 
@@ -25,8 +25,8 @@ lake -d lean build
 lake -d lean test
 ```
 
-The opt-in setup regression builds a tiny witness plugin once, then checks its saved Lake setup in fresh Lean
-processes without rebuilding. It verifies real goal features and omitted/missing-plugin refusals, and removes its
+The opt-in setup regression builds a tiny witness plugin once, then checks its saved Lake setup in fresh Lean processes
+without rebuilding. It verifies real goal features and omitted/missing-plugin refusals, and removes its
 `target/setup-semantic-check` fixture on success:
 
 ```sh
