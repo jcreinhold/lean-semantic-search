@@ -10,6 +10,8 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.7.9]
+
 ### Added
 
 - A Lean-only setup-aware goal feature entry point for supervised processes, preserving Lake-selected options,
