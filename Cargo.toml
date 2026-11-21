@@ -11,12 +11,12 @@ rust-version = "1.94"
 version = "0.7.8"
 
 [workspace.dependencies]
-lean-rs-worker-parent = { version = "0.10.0" }
-lean-rs-worker-protocol = { version = "0.10.0" }
+lean-rs-worker-parent = { version = "0.10.1" }
+lean-rs-worker-protocol = { version = "0.10.1" }
 lean-semantic-search-capability = { path = "crates/capability", version = "0.7.8" }
 lean-semantic-search-contract = { path = "crates/contract", version = "0.7.8" }
 lean-semantic-search-retrieval = { path = "crates/retrieval", version = "0.7.8" }
-lean-toolchain = { version = "0.10.0" }
+lean-toolchain = { version = "0.10.1" }
 rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

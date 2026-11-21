@@ -16,7 +16,7 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 - Updated the pinned Lean toolchain to `leanprover/lean4:v4.36.0`. Feature requests on Lean 4.36 reject duplicate JSON
   keys through the existing invalid-request diagnostic.
-- Use the published lean-rs 0.10.0 SDK. Runtime builds retain source-entry custody through artifact publication and
+- Use the published lean-rs 0.10.1 SDK. Runtime builds retain source-entry custody through artifact publication and
   expose an explicit shared-writer API with typed cancellation and cleanup failures.
 - Keep macOS linked runtime caches separate by canonical sysroot and supply that sysroot's library runpath.
 - Update bundled SQLite through rusqlite 0.41 to address RUSTSEC-2026-0459.
