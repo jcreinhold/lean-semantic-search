@@ -341,24 +341,31 @@ private def messageDiagnosticsJson (messages : MessageLog) : IO Json := do
         ]
   pure <| Json.arr out
 
-/-- Elaborate the requested source, select the tactic state matching the
-    declaration/position selectors, and return an owned `GoalSnapshot`. The
-    caller must install Lean's module search path before invoking this function.
-    This function elaborates against the current search path and never calls
-    `initSearchPath` or rebuilds the path from `LEAN_PATH`. Hides the
-    parser/frontend pipeline, the info-tree traversal, the metavariable context,
-    and the file-map span arithmetic. -/
-unsafe def selectGoalSnapshot (req : GoalRequest) : IO (Except CompatError GoalSnapshot) := do
-  let opts := Options.empty
+private unsafe def selectGoalSnapshotCore (req : GoalRequest) (setup? : Option ModuleSetup) :
+    IO (Except CompatError GoalSnapshot) := do
+  let opts := setup?.map (·.options.toOptions) |>.getD Options.empty
   let inputCtx := Parser.mkInputContext req.sourceText req.fileLabel
   let (header, parserState, headerMessages) ← Parser.parseHeader inputCtx
   if headerMessages.hasErrors then
     return .error <| CompatError.invalidRequest "could not parse source header"
   try
     Lean.enableInitializersExecution
-    let headerImports := Elab.headerToImports header (includeInit := true)
-    let commandEnv ← importModules headerImports opts (loadExts := true)
-    let initialMessages := headerMessages
+    let (commandEnv, initialMessages) ←
+      if let some setup := setup? then
+        setup.dynlibs.forM Lean.loadDynlib
+        Elab.processHeaderCore (Elab.HeaderSyntax.startPos header)
+          (setup.imports?.getD (Elab.HeaderSyntax.imports header))
+          (setup.isModule || Elab.HeaderSyntax.isModule header) opts headerMessages inputCtx
+          (plugins := setup.plugins) (mainModule := setup.name) (package? := setup.package?)
+          (arts := setup.importArts) (headerStx? := some header)
+      else
+        let headerImports := Elab.headerToImports header (includeInit := true)
+        let env ← importModules headerImports opts (loadExts := true)
+        pure (env, headerMessages)
+    if initialMessages.hasErrors then
+      return .error <|
+        CompatError.importFailed "Lake-selected source imports failed"
+          (some <| Json.mkObj [("messages", (← messageDiagnosticsJson initialMessages))])
     let mut commandState := Command.mkState commandEnv initialMessages opts
     commandState := { commandState with infoState.enabled := true }
     if let some namespaceText := req.namespaceName? then
@@ -382,5 +389,25 @@ unsafe def selectGoalSnapshot (req : GoalRequest) : IO (Except CompatError GoalS
     pure <|
       .error
         (CompatError.internalError s!"proof-goal source elaboration failed: {error}")
+
+/-- Elaborate source against the caller's current search path and default options.
+    Preserves the existing capability/FFI behavior and never calls `initSearchPath`.
+    Goal selection and translation remain shared with the setup-aware path. -/
+unsafe def selectGoalSnapshot (req : GoalRequest) : IO (Except CompatError GoalSnapshot) :=
+  selectGoalSnapshotCore req none
+
+/-- Elaborate source using its exact Lake-selected module setup in a fresh,
+    separately supervised Lean process. The caller retains the setup, artifact
+    roots and matching native images for the entire operation and selects its
+    working directory/search path; relative setup paths keep Lake's meaning.
+    This path loads the setup's dynlibs/plugins and uses its imports, artifact
+    map, options, package and module mode without an ambient header/cache fallback.
+    No expression or native authority crosses into a Rust host. -/
+unsafe def selectGoalSnapshotWithSetup (setup : ModuleSetup) (req : GoalRequest) :
+    IO (Except CompatError GoalSnapshot) := do
+  if setup.name != req.module.toName then
+    return .error <| CompatError.invalidRequest
+      s!"Lake setup module {setup.name} differs from requested module {req.module}"
+  selectGoalSnapshotCore req (some setup)
 
 end LeanSemanticSearch.LeanCompat

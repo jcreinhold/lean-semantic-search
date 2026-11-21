@@ -10,6 +10,11 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Added
+
+- A Lean-only setup-aware goal feature entry point for supervised processes, preserving Lake-selected options,
+  imports, artifacts and plugins. The existing capability/FFI contract is unchanged. Runtime source digest updated.
+
 ## [0.7.8]
 
 ### Changed

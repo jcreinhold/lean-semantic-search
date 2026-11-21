@@ -228,6 +228,59 @@ private unsafe def testProofGoalFeaturesPreservesAmbientSearchPath : IO Unit :=
     let rows ← arrField response "rows"
     require (!rows.isEmpty) "proof-goal feature response should contain fixture rows"
 
+private unsafe def testProofGoalFeaturesWithSetup : IO Unit := do
+  let request := Json.mkObj
+    [("module", Json.str "LeanSemanticSearchTest.GoalSource"),
+     ("source_text", Json.str proofGoalSource), ("declaration", Json.str "goalFeatureSource")]
+  let setup : ModuleSetup := { name := `LeanSemanticSearchTest.GoalSource }
+  let legacy ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures request.compress)
+  let .ok rows ← LeanSemanticSearch.GoalElaboration.runWithSetup setup request
+    | fail "default setup should yield goal features"
+  require (rows == (← arrField legacy "rows")) "default setup changed existing goal features"
+
+  let mismatch := { setup with name := `Wrong.Module }
+  let .error mismatchError ← LeanSemanticSearch.GoalElaboration.runWithSetup mismatch request
+    | fail "a setup for another module must refuse"
+  require (mismatchError.kind == .invalidRequest) "module mismatch must remain a request error"
+
+  let implicitSource := "import Init\n\ntheorem implicitGoal (x : α) : x = x := by\n  skip\n  rfl\n"
+  let implicitRequest := Json.mkObj
+    [("module", Json.str "LeanSemanticSearchTest.GoalSource"),
+     ("source_text", Json.str implicitSource), ("declaration", Json.str "implicitGoal")]
+  let defaultResponse ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures implicitRequest.compress)
+  require (!(← arrField defaultResponse "rows").isEmpty) s!"legacy default options should permit auto-implicits: {defaultResponse.compress}"
+  let some strictOptions := LeanOptions.fromOptions? (Options.empty.setBool `autoImplicit false)
+    | fail "serializable setup options expected"
+  let .error strictError ← LeanSemanticSearch.GoalElaboration.runWithSetup
+      { setup with options := strictOptions } implicitRequest
+    | fail "Lake autoImplicit=false must refuse the different implicit proof state"
+  require (strictError.kind == .invalidRequest) "source option failure must remain a structured request error"
+
+  let overriddenSource := proofGoalSource.replace "import Init" "import LeanSemanticSearchTest.MissingForSetup"
+  let overriddenRequest := Json.mkObj
+    [("module", Json.str "LeanSemanticSearchTest.GoalSource"),
+     ("source_text", Json.str overriddenSource), ("declaration", Json.str "goalFeatureSource")]
+  let .ok overriddenRows ← LeanSemanticSearch.GoalElaboration.runWithSetup
+      { setup with imports? := some #[{ module := `Init }] } overriddenRequest
+    | fail "Lake imports must supersede the source header"
+  require (!overriddenRows.isEmpty) "Lake-selected imports should produce goal features"
+
+  let absentPlugin := (← IO.currentDir) / ".lake" / "LeanSemanticSearchTest.missing-plugin.dylib"
+  require (!(← absentPlugin.pathExists)) "missing-plugin control path must not exist"
+  let .error pluginError ← LeanSemanticSearch.GoalElaboration.runWithSetup
+      { setup with plugins := #[Plugin.ofFilePath absentPlugin] } request
+    | fail "a missing setup plugin must refuse instead of using default imports"
+  require (pluginError.kind == .importFailed) "missing plugin must remain an import error"
+
+  let absentArtifact := (← IO.currentDir) / ".lake" / "LeanSemanticSearchTest.missing-artifact.olean"
+  require (!(← absentArtifact.pathExists)) "missing-artifact control path must not exist"
+  let artifacts : NameMap ImportArtifacts := ({} : NameMap ImportArtifacts).insert `Init
+    (.ofArrays #[#[absentArtifact], #[]])
+  let .error artifactError ← LeanSemanticSearch.GoalElaboration.runWithSetup
+      { setup with importArts := artifacts } request
+    | fail "a missing Lake-selected artifact must not fall back to the search path"
+  require (artifactError.kind == .importFailed) "missing artifact must remain an import error"
+
 private unsafe def testDiagnostics : IO Unit := do
   let malformed ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures "{")
   let malformedDiagnostics ← arrField malformed "diagnostics"
@@ -298,6 +351,7 @@ unsafe def main (_args : List String) : IO UInt32 := do
   testDeclarationFeaturesPreservesAmbientSearchPath
   testProofGoalFeatures
   testProofGoalFeaturesPreservesAmbientSearchPath
+  testProofGoalFeaturesWithSetup
   testDiagnostics
   testDuplicateJsonKeys
   pure 0

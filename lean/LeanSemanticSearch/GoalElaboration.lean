@@ -56,12 +56,25 @@ def parseRequest (payload : Json) : Except JsonSupport.Error GoalRequest := do
       position?
       namespaceName? := namespace? }
 
-unsafe def run (payload : Json) : IO (Except JsonSupport.Error (Array Json)) := do
+private unsafe def runUsing
+    (selectSnapshot : GoalRequest → IO (Except LeanCompat.CompatError LeanCompat.GoalSnapshot))
+    (payload : Json) : IO (Except JsonSupport.Error (Array Json)) := do
   match parseRequest payload with
   | .error err => pure <| .error err
   | .ok request =>
-      match ← LeanCompat.selectGoalSnapshot request with
+      match ← selectSnapshot request with
       | .error compatErr => pure <| .error (JsonSupport.Error.ofCompat compatErr)
       | .ok snapshot => pure <| .ok #[GoalFeatures.rowFromSnapshot snapshot]
+
+unsafe def run (payload : Json) : IO (Except JsonSupport.Error (Array Json)) :=
+  runUsing LeanCompat.selectGoalSnapshot payload
+
+/-- Compute the existing goal-feature rows with the exact Lake setup selected by
+    a separately supervised Lean process. Request parsing, goal selectors, error
+    mapping and row encoding are identical to `run`; the current FFI entry point
+    continues to use `run` and does not accept or load a setup. -/
+unsafe def runWithSetup (setup : Lean.ModuleSetup) (payload : Json) :
+    IO (Except JsonSupport.Error (Array Json)) :=
+  runUsing (LeanCompat.selectGoalSnapshotWithSetup setup) payload
 
 end LeanSemanticSearch.GoalElaboration
