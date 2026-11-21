@@ -5,7 +5,7 @@ that crate instead of copying this source into their own repositories.
 
 ## Provenance
 
-- `source_revision`: `cc0ab8215d99b050ea9a98f15348aa2bd50bc4ae`
+- `source_revision`: `7d1b551f8c6fff9f6c5738e5af221a83e3368c36`
 - Lake package name: `lean-semantic-search`
 - Lean library: `LeanSemanticSearch`
 - Manifest fact: `lean/lake-manifest.json` has `"packages": []`.
@@ -59,7 +59,7 @@ it from the repository root:
 } | LC_ALL=C sort -z | xargs -0 shasum -a 256 | shasum -a 256
 ```
 
-`runtime_source_digest`: `cd1dc009159d1d466f845840f837d5fc9478a92562e383031af6124d3d10ce3a`
+`runtime_source_digest`: `cb7287fa85b2f2260a1a66b811b64406439ce8f0f4e4e2d68ae84034efee4173`
 
 ## Runtime Build Measurement
 
