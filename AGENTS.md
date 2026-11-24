@@ -37,6 +37,14 @@ cold process; the nextest `slow-timeout` warns rather than killing until ~4 minu
 If `lake`, `mdwright`, `taplo`, or `cargo-deny` is unavailable, record the exact command failure rather than working
 around it.
 
+## Release rule
+
+Test changes spanning the SDK and this repo together locally before pushing or tagging. Use temporary Cargo
+`[patch.crates-io]` overrides. Check the resolved crates with `cargo metadata --format-version 1`, then run the
+affected real Lean operation and this repo's required `scripts/prerelease.sh` checks. Do not publish an SDK crate just
+to test it here. Do not commit local paths or an override lockfile. When the whole change passes locally, release the
+batch upstream first, resolve the published pins, and keep the required release checks.
+
 ## Architecture: the boundary is the point
 
 The whole design is about **what each layer is forbidden to know**. Read `docs/architecture/00-boundary.md` before
