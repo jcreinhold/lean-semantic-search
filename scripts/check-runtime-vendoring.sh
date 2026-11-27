@@ -1,52 +1,19 @@
 #!/usr/bin/env bash
 # Prove the packaged runtime crate payload matches the canonical Lean runtime
-# file set, then build that packaged payload as a downstream host would.
+# file set and that `cargo package` ships it. The payload is byte-identical to
+# `lean/`, so `lake -d lean build` already compiles it; the opt-in runtime build
+# test builds the materialized package.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_ROOT="$REPO_ROOT/crates/runtime/runtime"
-TMPDIR_ROOT="${TMPDIR:-/tmp}"
-WORKDIR="$(mktemp -d "${TMPDIR_ROOT%/}/lean-semantic-search-runtime.XXXXXX")"
-
-cleanup() {
-	rm -rf "$WORKDIR"
-}
-trap cleanup EXIT
 
 require_cmd() {
 	if ! command -v "$1" >/dev/null 2>&1; then
 		printf 'required command not found: %s%s\n' "$1" "${2:+ ($2)}" >&2
 		exit 2
 	fi
-}
-
-active_toolchain() {
-	if command -v elan >/dev/null 2>&1; then
-		local toolchain
-		toolchain="$(
-			elan show 2>/dev/null |
-				awk '
-					/^active toolchain$/ { active = 1; next }
-					active && /^-+$/ { next }
-					active && NF { print $1; exit }
-				'
-		)"
-		if [[ -n "$toolchain" ]]; then
-			printf '%s\n' "$toolchain"
-			return 0
-		fi
-	fi
-
-	local version
-	version="$(lean --version | sed -n 's/^Lean (version \([^,)]*\).*/\1/p')"
-	if [[ -n "$version" ]]; then
-		printf 'leanprover/lean4:v%s\n' "$version"
-		return 0
-	fi
-
-	printf 'could not determine a Lean toolchain from elan or lean --version\n' >&2
-	return 1
 }
 
 compare_file() {
@@ -59,16 +26,7 @@ compare_file() {
 	fi
 }
 
-copy_packaged_file() {
-	local src="$1"
-	mkdir -p "$WORKDIR/$(dirname "$src")"
-	cp "$RUNTIME_ROOT/$src" "$WORKDIR/$src"
-}
-
-require_cmd git
 require_cmd cargo
-require_cmd lake "install via elan + leanprover/lean4"
-require_cmd lean "install via elan + leanprover/lean4"
 
 compare_file lean/lakefile.lean lakefile.lean
 compare_file lean/lake-manifest.json lake-manifest.json
@@ -135,18 +93,3 @@ do
 		exit 1
 	fi
 done
-
-(
-	cd "$RUNTIME_ROOT"
-	find . -type f -print0
-) |
-	while IFS= read -r -d '' path; do
-		copy_packaged_file "${path#./}"
-	done
-
-printf '%s\n' "$(active_toolchain)" >"$WORKDIR/lean-toolchain"
-
-(
-	cd "$WORKDIR"
-	lake build LeanSemanticSearch
-)
