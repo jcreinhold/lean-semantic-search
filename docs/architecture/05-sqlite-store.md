@@ -109,14 +109,23 @@ measurement.
 The benchmark builds two synthetic corpora—100k and 200k declarations—where a fixed-size cohort shares the anchor's keys
 and everyone else is unique, so the postings a query touches stay constant as the corpus grows. It asserts the peak
 query heap stays under a fixed bound and does not scale with corpus size: it stays identical to the byte across the
-doubled corpus while query latency stays flat and only build time scales. `06-cache-lifecycle.md` records the measured
-numbers as a standing gate. The in-memory `Corpus` loads everything, which is right for a small or workspace corpus; the
-SQLite `Corpus` is for a large or external one such as mathlib.
+doubled corpus while query latency stays flat and only build time scales. `tests/benchmark.rs` asserts a peak query heap
+under 4 MB and a 200k/100k heap ratio under 1.5; one measured run peaked at 21,532 bytes for both sizes. Run it with
+`cargo test -p lean-semantic-search-store --test benchmark --release -- --ignored --nocapture`. The in-memory `Corpus`
+loads everything, which is right for a small or workspace corpus; the SQLite `Corpus` is for a large or external one
+such as mathlib.
 
 ## The corpus token
 
-`corpus_token` is an opaque, caller-supplied content identity stored in `metadata` and exposed as a read-only fact,
-alongside the store's own `schema_version` and the retrieval `policy_version`. The store records and compares these but
-never interprets the token: it folds no Lake, workspace, or toolchain knowledge into it. The freshness and lifecycle
-contract—deciding when a stored token means a corpus is stale—is the subject of the next note; this one only writes and
-exposes the value.
+`corpus_token` is an opaque, caller-supplied content identity stored in `metadata`. `Store` exposes it with the store's
+own `schema_version` and the retrieval `policy_version`. The store never interprets the token: it folds no Lake,
+workspace, or toolchain knowledge into it. The caller decides when a stored corpus is stale by comparing these values
+with its own, and it chooses where corpora live and when to delete them. `Store::open` refuses a schema version it
+cannot read with `StoreError::SchemaMismatch`.
+
+## Concurrency
+
+Each `Store` opens its own read-only connection, and nothing writes a published file again, so many readers can share
+one. A build writes `<path>.building` and renames it into place, so no reader opens a half-written index. Two builders
+for the same path share that temp file and break each other: run one build per destination at a time, or give each
+concurrent build its own path.

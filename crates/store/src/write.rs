@@ -66,8 +66,7 @@ impl StoreBuilder {
     /// transaction fail.
     pub fn create(path: impl AsRef<Path>, corpus_token: impl Into<String>) -> Result<Self, StoreError> {
         let final_path = path.as_ref().to_path_buf();
-        // Build into a fresh content-addressed directory without the caller
-        // pre-creating it: a missing parent is the normal case, not an error.
+        // Callers often build into a new directory, so create a missing parent.
         // A bare filename has an empty parent and needs no directory.
         if let Some(parent) = final_path.parent()
             && !parent.as_os_str().is_empty()

@@ -15,27 +15,17 @@
 //! planning, policy, and output shape are unchanged: a `Store` is just another
 //! `Corpus`, and `retrieve_across` fans one anchor across several of them.
 //!
-//! Reuse is gated by [`Store::open_fresh`], which accepts a persisted corpus only
-//! on a matching opaque `corpus_token` and matching versions and reports every
-//! mismatch or corruption as a [`CacheMiss`] rather than an error. The neutral
-//! [`set_latest`]/[`cleanup`] primitives manage content-addressed corpus
-//! directories and the atomic latest-pointer the caller resolves.
+//! A store records the caller's opaque `corpus_token` and exposes it with the
+//! schema and policy versions. The caller decides whether a stored corpus is
+//! stale, where it lives, and when to delete it.
 //!
 //! See `docs/architecture/05-sqlite-store.md` for the schema and the read/write
-//! design, and `docs/architecture/06-cache-lifecycle.md` for the freshness
-//! contract and the lifecycle primitives.
+//! design.
 
-mod freshness;
-mod lifecycle;
 mod read;
 mod schema;
 mod write;
 
-pub use freshness::{CacheMiss, CorpusLookup, open_latest_fresh};
-pub use lifecycle::{
-    CleanupEntry, CleanupMode, CleanupReport, cleanup, corpus_dir, index_path, latest_index_path, latest_name,
-    set_latest,
-};
 pub use read::Store;
 pub use schema::STORE_SCHEMA_VERSION;
 pub use write::{Ingest, StoreBuilder};

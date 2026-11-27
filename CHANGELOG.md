@@ -41,6 +41,10 @@ must have a corresponding `## [X.Y.Z]` section here.
 - The unused declaration timing in Lean: `ModuleExtraction.RunStats`, `RunOutput`, `withDeclSourcesProfiled` and
   `DeclarationFeatures.runProfiled`. `ModuleExtraction.declSources` returns the accepted declarations. Runtime source
   digest updated.
+- Breaking: the store's cache layer: `Store::open_fresh`, `open_latest_fresh`, `CacheMiss`, `CorpusLookup`,
+  `set_latest`, `latest_name`, `latest_index_path`, `index_path`, `corpus_dir`, `cleanup`, `CleanupMode`,
+  `CleanupReport` and `CleanupEntry`. No consumer called them. Callers compare `Store::corpus_token`, `schema_version`
+  and `policy_version` themselves and own their cache directories.
 
 ## [0.7.9]
 

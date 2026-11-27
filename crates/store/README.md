@@ -10,18 +10,17 @@ postings touched, never to the corpus size. A `StoreBuilder` ingests declaration
 them with bounded memory, and publishes the result atomically by renaming a temp build into place.
 
 It carries no declaration display text, module or kind fields, provenance, labels, probe caches, or any duplicate-audit
-or proof-agent vocabulary—those stay with consumers. The `corpus_token`, `schema_version`, and `policy_version` are
-recorded and exposed as opaque read-only facts; the store never interprets them. `Store::open_fresh` reuses a corpus
-only on a matching opaque token and matching versions, turning every mismatch or corruption into a structured cache miss
-rather than an error; `set_latest`/`cleanup` are neutral, latest-pointer-protecting, dry-run-by-default primitives over
-content-addressed corpus directories. No other shared crate depends on this one, and `retrieval` takes no dependency on
-it.
+or proof-agent vocabulary—those stay with consumers. The store records the caller's opaque `corpus_token` with its own
+`schema_version` and `policy_version` and exposes all three; it never interprets the token. The caller decides when a
+stored corpus is stale, where corpora live, and when to delete them. Run one build per destination path at a time:
+builders for the same path share one temp file. No other shared crate depends on this one, and `retrieval` takes no
+dependency on it.
 
 ## Use it
 
 ```toml
 [dependencies]
-lean-semantic-search-store = "0.3"
+lean-semantic-search-store = "0.7"
 ```
 
 ```rust
@@ -35,7 +34,6 @@ use lean_semantic_search_retrieval::{Anchor, retrieve_across};
 - [Boundary note](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/00-boundary.md)
 - [Persistence seam](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/04-persistence.md)
 - [SQLite store design](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/05-sqlite-store.md)
-- [Cache lifecycle](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/06-cache-lifecycle.md)
 - [Retrieval crate](https://github.com/jcreinhold/lean-semantic-search/blob/main/crates/retrieval/README.md)
 - [DTO contract crate](https://github.com/jcreinhold/lean-semantic-search/blob/main/crates/contract/README.md)
 
