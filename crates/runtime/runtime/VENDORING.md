@@ -60,19 +60,3 @@ it from the repository root:
 ```
 
 `runtime_source_digest`: `325560f96c429bc6edd2ec5c34f3358b8e8b9694f7c59afc4ce9815e0e17ed1b`
-
-## Runtime Build Measurement
-
-Recorded 2026-06-09 on macOS arm64 (`Darwin Mac 25.4.0`), Apple M4 Pro, Lean toolchain `leanprover/lean4:v4.31.0-rc1`.
-Runtime payload: 14 Lean source files (`LeanSemanticSearch.lean` plus 13 files under `LeanSemanticSearch/`), zero Lake
-packages.
-
-Command:
-
-```sh
-LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT="$(lean --print-prefix)" \
-LEAN_SEMANTIC_SEARCH_RUNTIME_TOOLCHAIN="$(cat lean/lean-toolchain)" \
-  cargo test -p lean-semantic-search-runtime --test build_cached -- --ignored --nocapture
-```
-
-Result: cold materialize + shared capability build `6378 ms`; immediate warm cache reuse + build check `6 ms`.

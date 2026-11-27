@@ -337,8 +337,6 @@ dependencies = [
 name = "lean-semantic-search-runtime"
 version = "0.7.9"
 dependencies = [
- "lean-rs-worker-protocol",
- "lean-semantic-search-capability",
  "lean-toolchain",
  "serde",
  "serde_json",

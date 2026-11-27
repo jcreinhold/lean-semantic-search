@@ -56,9 +56,10 @@ allow = []
 # Pin the lean-rs crate family to a single semver-compatible line. lean-rs is
 # 0.x, so 0.9.x and 0.10.x are incompatible: if an old transitive pin (e.g. a
 # not-yet-upgraded consumer) drags a pre-0.10 copy into the graph alongside the
-# 0.10 crates this workspace builds against, their shared types (e.g.
-# lean_toolchain::LeanBuiltCapability) stop unifying and surface as a confusing
-# deep E0308. Denying anything below the current floor makes that partial
+# 0.10 crates this workspace builds against, their shared types stop unifying:
+# a confusing deep E0308, or a host's downcast to
+# lean_toolchain::shared_writer::WriterFailure that silently finds nothing in
+# a runtime error. Denying anything below the current floor makes that partial
 # upgrade fail `cargo deny check` loudly instead. Raise the floor in lockstep
 # on the next lean-rs major (0.x) bump.
 deny = [

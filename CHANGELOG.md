@@ -12,8 +12,19 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ### Changed
 
+- Breaking: `build_cached_with_writer` now runs `lake build LeanSemanticSearch` under the writer and lets Lake decide
+  what is stale. It no longer links a shared library, writes an SDK capability manifest, or keeps a macOS runpath cache
+  per sysroot. `SemanticSearchRuntime` fields are private; read `package_root()`, `module_dir()` (the built `.olean`
+  directory for `LEAN_PATH`) and `provenance()`. `Error` is opaque: its message names the failed step and its source
+  chain keeps the SDK's `WriterFailure`.
 - The opt-in runtime build test reads the writer helper from `LEAN_RS_WRITER_EXECUTABLE`, the SDK's current name, in
   place of `LEAN_HOST_MCP_WRITER_EXECUTABLE`, which lean-rs 0.11 removes. The lockfile now resolves lean-rs 0.10.17.
+
+### Removed
+
+- Breaking: runtime `build_cached` (the SDK's own writer selection), `SemanticSearchRuntime::dependency`, the public
+  `PACKAGE_NAME` constant and `compute_runtime_source_digest`. The runtime crate no longer depends on
+  `lean-rs-worker-protocol` or `lean-semantic-search-capability`.
 
 ## [0.7.9]
 
