@@ -182,7 +182,7 @@ run_gate "CHANGELOG has a section for the workspace version" \
 
 if command -v actionlint >/dev/null 2>&1; then
 	run_gate "actionlint workflows" \
-		actionlint .github/workflows/ci.yml .github/workflows/release.yml
+		actionlint .github/workflows/*.yml
 else
 	log_warn "actionlint not installed; skipping (install: go install github.com/rhysd/actionlint/cmd/actionlint@latest)"
 	SKIPPED+=("actionlint workflows")

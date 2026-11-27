@@ -38,8 +38,8 @@ case "$file" in
 	command -v npx >/dev/null 2>&1 && npx --yes prettier --write "$file" >/dev/null 2>&1 || true
 	;;
 *.md)
-	# The CI policy job only reflows README.md, AGENTS.md, docs/architecture/*.md,
-	# crates/*/README.md, and lean/README.md. CLAUDE.md (the thin @AGENTS.md
+	# The CI policy job only checks README.md, AGENTS.md, docs/architecture/*.md,
+	# crates/*/README.md, lean/README.md, and lean/VENDORING.md. CLAUDE.md (the thin @AGENTS.md
 	# import) and anything under .claude/ are NOT policy targets — hard-skip
 	# them so an edit to a skill/agent doc is never reflowed out from under Claude.
 	case "$file" in
