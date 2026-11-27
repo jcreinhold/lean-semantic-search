@@ -341,27 +341,32 @@ private def messageDiagnosticsJson (messages : MessageLog) : IO Json := do
         ]
   pure <| Json.arr out
 
-private unsafe def selectGoalSnapshotCore (req : GoalRequest) (setup? : Option ModuleSetup) :
+/-- Elaborate source with the exact module setup that Lake selected for it. The
+    caller runs this in a fresh, separately supervised Lean process, keeps the
+    setup's artifacts and native images in place for the whole call, and chooses
+    the working directory and search path; relative setup paths keep Lake's
+    meaning. This function loads the setup's dynlibs and plugins and uses its
+    imports, artifact map, options, package and module mode, with no fallback to
+    the source header or an ambient cache. It never calls `initSearchPath`. -/
+unsafe def selectGoalSnapshotWithSetup (setup : ModuleSetup) (req : GoalRequest) :
     IO (Except CompatError GoalSnapshot) := do
-  let opts := setup?.map (·.options.toOptions) |>.getD Options.empty
+  if setup.name != req.module.toName then
+    return .error <| CompatError.invalidRequest
+      s!"Lake setup module {setup.name} differs from requested module {req.module}"
+  let opts := setup.options.toOptions
   let inputCtx := Parser.mkInputContext req.sourceText req.fileLabel
   let (header, parserState, headerMessages) ← Parser.parseHeader inputCtx
   if headerMessages.hasErrors then
     return .error <| CompatError.invalidRequest "could not parse source header"
   try
     Lean.enableInitializersExecution
+    setup.dynlibs.forM Lean.loadDynlib
     let (commandEnv, initialMessages) ←
-      if let some setup := setup? then
-        setup.dynlibs.forM Lean.loadDynlib
-        Elab.processHeaderCore (Elab.HeaderSyntax.startPos header)
-          (setup.imports?.getD (Elab.HeaderSyntax.imports header))
-          (setup.isModule || Elab.HeaderSyntax.isModule header) opts headerMessages inputCtx
-          (plugins := setup.plugins) (mainModule := setup.name) (package? := setup.package?)
-          (arts := setup.importArts) (headerStx? := some header)
-      else
-        let headerImports := Elab.headerToImports header (includeInit := true)
-        let env ← importModules headerImports opts (loadExts := true)
-        pure (env, headerMessages)
+      Elab.processHeaderCore (Elab.HeaderSyntax.startPos header)
+        (setup.imports?.getD (Elab.HeaderSyntax.imports header))
+        (setup.isModule || Elab.HeaderSyntax.isModule header) opts headerMessages inputCtx
+        (plugins := setup.plugins) (mainModule := setup.name) (package? := setup.package?)
+        (arts := setup.importArts) (headerStx? := some header)
     if initialMessages.hasErrors then
       return .error <|
         CompatError.importFailed "Lake-selected source imports failed"
@@ -389,25 +394,5 @@ private unsafe def selectGoalSnapshotCore (req : GoalRequest) (setup? : Option M
     pure <|
       .error
         (CompatError.internalError s!"proof-goal source elaboration failed: {error}")
-
-/-- Elaborate source against the caller's current search path and default options.
-    Preserves the existing capability/FFI behavior and never calls `initSearchPath`.
-    Goal selection and translation remain shared with the setup-aware path. -/
-unsafe def selectGoalSnapshot (req : GoalRequest) : IO (Except CompatError GoalSnapshot) :=
-  selectGoalSnapshotCore req none
-
-/-- Elaborate source using its exact Lake-selected module setup in a fresh,
-    separately supervised Lean process. The caller retains the setup, artifact
-    roots and matching native images for the entire operation and selects its
-    working directory/search path; relative setup paths keep Lake's meaning.
-    This path loads the setup's dynlibs/plugins and uses its imports, artifact
-    map, options, package and module mode without an ambient header/cache fallback.
-    No expression or native authority crosses into a Rust host. -/
-unsafe def selectGoalSnapshotWithSetup (setup : ModuleSetup) (req : GoalRequest) :
-    IO (Except CompatError GoalSnapshot) := do
-  if setup.name != req.module.toName then
-    return .error <| CompatError.invalidRequest
-      s!"Lake setup module {setup.name} differs from requested module {req.module}"
-  selectGoalSnapshotCore req (some setup)
 
 end LeanSemanticSearch.LeanCompat

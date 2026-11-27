@@ -1,6 +1,6 @@
 ---
 name: boundary-reviewer
-description: Reviews a diff against lean-semantic-search's "the boundary is the point" invariants — the intent-level checks no linter or unit test can encode. Use before opening a PR, when asked to "review architecture/boundaries", or when a change touches the Lean↔Rust seam, the contract DTOs, capability exports, schema/algorithm versions, retrieval policy, or adds a crate.
+description: Reviews a diff against lean-semantic-search's "the boundary is the point" invariants — the intent-level checks no linter or unit test can encode. Use before opening a PR, when asked to "review architecture/boundaries", or when a change touches the Lean↔Rust seam, the contract DTOs, the Lean entry points hosts call, schema/algorithm versions, retrieval policy, or adds a crate.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
@@ -29,12 +29,12 @@ Before judging, read the contracts you are enforcing (they are the source of tru
 memory):
 
 - `docs/architecture/00-boundary.md` — the hidden-knowledge table and the "what must not leak" list
-- `docs/architecture/01-capability-contract.md` — export names, request shapes, response envelopes,
+- `docs/architecture/01-capability-contract.md` — entry points, request shapes, response envelopes,
   versions
 - `docs/architecture/03-retrieval.md` — what the retrieval crate is allowed to expose
 - `AGENTS.md` — the invariants stated as prose
-- `crates/contract/src/lib.rs`, `crates/capability/src/lib.rs` — the version constants and export
-  identity that must stay in lockstep with `lean/LeanSemanticSearch/Json.lean` and `Capability.lean`
+- `crates/contract/src/lib.rs` — the version and command-name constants that must stay in lockstep
+  with `lean/LeanSemanticSearch/Json.lean`
 
 You enforce the *intent* facts a compiler or unit test cannot see. Do not re-report a clippy lint or
 a self-contained crate test; flag what they cannot.
@@ -45,8 +45,8 @@ a self-contained crate test; flag what they cannot.
 
 - A new Rust crate or module that does not hide a decision — empty placeholders for retrieval,
   ranking, or storage that "don't exist yet." A crate exists only to hide something.
-- Search/feature semantics leaking *downward* into the `lean-rs`/`lean-rs-worker` transport
-  substrate, or this package reaching Lean by any path other than the generic worker transport.
+- Search/feature semantics leaking *downward* into `lean-rs`, or a Rust crate starting Lean itself.
+  Only `runtime` runs Lean tooling: one `lake build` through the SDK's shared writer.
 - The Lean package's hidden knowledge (expression traversal, binder scheduling, role assignment,
   broad-head marking, key encoding) being reconstructed or depended on in Rust.
 
@@ -66,8 +66,9 @@ exposes:
 - Version strings stay centralized as constants in `contract` (+ `RETRIEVAL_POLICY_VERSION` in
   `retrieval`) and mirrored as defs in the Lean `Json` module. If the diff changes a version on one
   side without the mirror **and** `docs/architecture/01-capability-contract.md`, flag it.
-- The five `@[export lean_semantic_search_*]` functions must stay one-to-one with the
-  `*_EXPORT`/`*_COMMAND` constants and the advertised commands in the contract doc.
+- Hosts call `Capability.declarationFeatures` and `GoalElaboration.runWithSetup` by name from their
+  own Lean driver. A rename or signature change is a breaking change: flag it unless the diff also
+  updates the contract doc and the `CHANGELOG.md` `[Unreleased]` section.
 
 **4. Conventions.**
 

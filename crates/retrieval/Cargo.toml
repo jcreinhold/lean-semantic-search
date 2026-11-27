@@ -14,13 +14,6 @@ lean-semantic-search-contract = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-[dev-dependencies]
-lean-rs-worker-parent = { workspace = true }
-lean-rs-worker-protocol = { workspace = true }
-lean-semantic-search-capability = { workspace = true }
-lean-semantic-search-contract = { workspace = true }
-lean-toolchain = { workspace = true }
-serde_json = { workspace = true }
 
 [lib]
 doctest = false

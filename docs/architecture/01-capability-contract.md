@@ -1,55 +1,40 @@
 # Capability Contract
 
-The Lean package exports commands through the generic `lean-rs-worker` capability ABI. The worker substrate owns process
-framing and lifecycle; this package owns command names, versions, and JSON payload meanings.
+A host runs this package's Lean code in its own supervised Lean process. It builds the package with
+`lean-semantic-search-runtime`, puts the built modules on `LEAN_PATH`, and calls the entry points below from its own
+Lean driver. This package owns the entry points, command names, versions, and JSON payload meanings. The host owns the
+process, import selection, and transport.
 
-## Exports
+## Entry Points
 
-| Export | ABI | Meaning |
+| Lean declaration | Type | Meaning |
 | --- | --- | --- |
-| `lean_semantic_search_metadata` | `String -> IO String` | Report command names, semantic algorithm versions, and capability facts. |
-| `lean_semantic_search_doctor` | `String -> IO String` | Return structured pass, warning, and error diagnostics. |
-| `lean_semantic_search_declaration_features` | `String -> IO String` | Return declaration feature rows for requested modules or declarations. |
-| `lean_semantic_search_proof_goal_features` | `String -> IO String` | Return proof-goal feature rows for a selected proof state. |
-| `lean_semantic_search_stream_declaration_features` | `String -> USize -> USize -> IO UInt8` | Optional large-batch declaration feature export. |
+| `LeanSemanticSearch.Capability.declarationFeatures` | `String → IO String` | Answer one declaration feature request, given as JSON text, with a complete response envelope. |
+| `LeanSemanticSearch.GoalElaboration.runWithSetup` | `ModuleSetup → Json → IO (Except JsonSupport.Error (Array Json))` | Elaborate one proof-goal request's source with the module setup Lake selected for it, and return the proof-goal rows or a structured error. |
 
-The declaration and proof-goal commands return versioned semantic feature rows. The streaming export is reserved for
-large declaration batches; the current implementation returns success and emits no rows.
+Hosts import `LeanSemanticSearch.Capability`, which imports both. `declarationFeatures` imports the requested modules
+from the current search path; the caller installs that path first.
 
-## Metadata
+`runWithSetup` takes the setup that `lake setup-file` prints for the source file. It loads the setup's dynlibs and
+plugins and uses its imports, artifact map, options, package, and module mode. When one of these fails it returns an
+error; it never falls back to the source header or the search path, and it never calls `initSearchPath`. A setup for
+another module is a request error.
 
-Metadata uses the generic worker shape:
+`runWithSetup` returns rows, not an envelope. Wrap them with the `LeanSemanticSearch.JsonSupport` helpers:
 
-```json
-{
-  "commands": [{ "name": "declaration_features", "version": "declaration_features.v1" }],
-  "capabilities": [{ "name": "semantic_features.declarations", "version": "features.roles.v3" }],
-  "lean_version": "Lean 4.x",
-  "extra": {
-    "schema_version": "lean-semantic-search.capability.v1",
-    "canonical_version": "canonical.expr.v3",
-    "feature_version": "features.roles.v3"
-  }
-}
+```lean
+let command := JsonSupport.proofGoalCommand
+let version := JsonSupport.proofGoalFeatureCommandVersion
+let features := JsonSupport.semanticFeatureVersion
+let response :=
+  match ← GoalElaboration.runWithSetup setup request with
+  | .ok rows => JsonSupport.responseJson command version features rows #[]
+  | .error err => JsonSupport.errorResponseJson command version features err
 ```
 
-The command list is an advertisement, not a cache key. Downstream callers must use explicit schema and feature-version
-fields in command responses when deciding compatibility.
-
-## Doctor
-
-Doctor reports use structured diagnostics:
-
-```json
-{
-  "diagnostics": [
-    { "severity": "pass", "code": "lean_semantic_search.boundary.ready", "message": "...", "details": {} }
-  ],
-  "metadata": { "schema_version": "lean-semantic-search.capability.v1" }
-}
-```
-
-The doctor reports a passing boundary check and a passing feature-availability check.
+`JsonSupport` also holds `schemaVersion`, `declarationCommand`, and `declarationFeatureCommandVersion`.
+`crates/contract` mirrors these strings as Rust constants; a host compares them with each response before using its
+rows.
 
 ## Feature Commands
 
@@ -80,9 +65,10 @@ features from the selected goal's expressions and local declarations:
 }
 ```
 
-Feature request JSON objects must have unique keys, including nested objects and keys written with Unicode escapes.
+Declaration request JSON objects must have unique keys, including nested objects and keys written with Unicode escapes.
 Duplicate keys return an empty `rows` array and a `lean_semantic_search.request.invalid` error diagnostic in the
-response.
+response. Proof-goal requests reach `runWithSetup` as parsed `Json`, so the host's parser decides; Lean's `Json.parse`
+also rejects duplicate keys.
 
 Declaration and proof-goal feature responses use the same envelope:
 
@@ -102,21 +88,15 @@ bounded source spans when Lean can recover ranges. Proof-goal rows include goal 
 and low-signal markers. Rows must not include raw expressions, feature-key encodings, storage records, downstream report
 fields, rendered goals, or transport response types.
 
-## Streaming
-
-The streaming export exists for large declaration batches. Its payload schema is the same semantic row schema as the
-non-streaming declaration feature command, but delivery mechanics remain owned by `lean-rs-worker`. The current
-implementation emits no payload entries and returns success.
-
 ## Versioning
 
 | Version | Covers |
 | --- | --- |
-| `lean-semantic-search.capability.v1` | Capability metadata, doctor, and command envelope. |
+| `lean-semantic-search.capability.v1` | Command response envelope. |
 | `canonical.expr.v3` | Canonical expression fingerprint algorithm. |
-| `features.role_key.v1` | Private role-feature key algorithm. |
+| `features.role_key.v1` | Private role-feature key algorithm; Lean only, since role keys are opaque to Rust. |
 | `features.roles.v3` | Semantic feature-row algorithm. |
 | `declaration_features.v1` | Declaration feature command schema. |
 | `proof_goal_features.v1` | Proof-goal feature command schema. |
 
-Retrieval-specific versions can be added later without changing these export names.
+Ranking carries its own `RETRIEVAL_POLICY_VERSION` in `crates/retrieval`; see [03-retrieval.md](03-retrieval.md).

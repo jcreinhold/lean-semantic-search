@@ -84,17 +84,6 @@ private unsafe def testGoldenFingerprints : IO Unit := do
     s!"featureFixture conclusion-shape fingerprint drifted: {fp.conclusionShape}"
   require (fp.binderCount == 4) s!"featureFixture binder count drifted: {fp.binderCount}"
 
-private unsafe def testMetadataAndDoctor : IO Unit := do
-  let metadata ← parseJson (← LeanSemanticSearch.Capability.metadata "")
-  let extra ← objField metadata "extra"
-  require
-    ((← strField extra "schema_version") == LeanSemanticSearch.JsonSupport.schemaVersion)
-    "metadata must carry the schema version"
-  require (!(← arrField metadata "commands").isEmpty) "metadata must advertise commands"
-  require (!(← arrField metadata "capabilities").isEmpty) "metadata must advertise capabilities"
-  let doctor ← parseJson (← LeanSemanticSearch.Capability.doctor "")
-  require (!(← arrField doctor "diagnostics").isEmpty) "doctor must report diagnostics"
-
 -- The classifier must filter compiler-generated declarations (here the
 -- `usesMatch.match_1` matcher) unless generated declarations are requested.
 private unsafe def testGeneratedFiltering : IO Unit := do
@@ -163,7 +152,7 @@ private unsafe def requireSentinelImport (moduleName : Name) : IO Unit := do
     Lean.enableInitializersExecution
     discard <| importModules #[({ module := moduleName } : Import)] Options.empty (loadExts := true)
   catch error =>
-    fail s!"ambient sentinel module was not importable after capability export: {error}"
+    fail s!"ambient sentinel module was not importable after the command ran: {error}"
 
 private unsafe def withAmbientSentinel (label : String) (action : IO Unit) : IO Unit :=
   IO.FS.withTempDir fun dir => do
@@ -198,77 +187,73 @@ private def proofGoalSource : String :=
     , "  exact And.intro h.right hp"
     ]
 
+-- A Lake setup with no import override, options, plugins, or artifacts, so
+-- elaboration follows the source header against the test search path.
+private def goalSetup : ModuleSetup := { name := `LeanSemanticSearchTest.GoalSource }
+
+private def goalRequest (source declaration : String) : Json :=
+  Json.mkObj
+    [ ("module", Json.str "LeanSemanticSearchTest.GoalSource")
+    , ("source_text", Json.str source)
+    , ("declaration", Json.str declaration)
+    ]
+
 private unsafe def testProofGoalFeatures : IO Unit := do
-  let request :=
-    Json.mkObj
-      [ ("module", Json.str "LeanSemanticSearchTest.GoalSource")
-      , ("source_text", Json.str proofGoalSource)
-      , ("declaration", Json.str "goalFeatureSource")
-      ]
-  let response ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures request.compress)
+  let .ok rows ←
+      LeanSemanticSearch.GoalElaboration.runWithSetup goalSetup
+        (goalRequest proofGoalSource "goalFeatureSource")
+    | fail "the default setup should yield proof-goal features"
+  let some row := rows[0]? | fail "expected one proof-goal row"
   require
-    ((← strField response "feature_version") == LeanSemanticSearch.JsonSupport.semanticFeatureVersion)
-    "proof-goal response should carry the semantic feature version"
-  let row ← firstRow response
+    ((← strField row "feature_version") == LeanSemanticSearch.JsonSupport.semanticFeatureVersion)
+    "proof-goal row should carry the semantic feature version"
   let roleFeatures ← arrField row "role_features"
   require (roleFeatures.size > 0) "proof-goal row should contain role features"
+  let text := (Json.arr rows).compress
   require
-    (!response.compress.contains "goalsBefore" && !response.compress.contains "raw_expr")
-    "proof-goal response must not expose rendered goals or raw expressions"
+    (!text.contains "goalsBefore" && !text.contains "raw_expr")
+    "proof-goal rows must not expose rendered goals or raw expressions"
 
 private unsafe def testProofGoalFeaturesPreservesAmbientSearchPath : IO Unit :=
   withAmbientSentinel "ProofGoal" do
-    let request :=
-      Json.mkObj
-        [ ("module", Json.str "LeanSemanticSearchTest.GoalSource")
-        , ("source_text", Json.str proofGoalSource)
-        , ("declaration", Json.str "goalFeatureSource")
-        ]
-    let response ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures request.compress)
-    let rows ← arrField response "rows"
-    require (!rows.isEmpty) "proof-goal feature response should contain fixture rows"
+    let .ok rows ←
+        LeanSemanticSearch.GoalElaboration.runWithSetup goalSetup
+          (goalRequest proofGoalSource "goalFeatureSource")
+      | fail "the default setup should yield proof-goal features"
+    require (!rows.isEmpty) "proof-goal rows should not be empty"
 
-private unsafe def testProofGoalFeaturesWithSetup : IO Unit := do
-  let request := Json.mkObj
-    [("module", Json.str "LeanSemanticSearchTest.GoalSource"),
-     ("source_text", Json.str proofGoalSource), ("declaration", Json.str "goalFeatureSource")]
-  let setup : ModuleSetup := { name := `LeanSemanticSearchTest.GoalSource }
-  let legacy ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures request.compress)
-  let .ok rows ← LeanSemanticSearch.GoalElaboration.runWithSetup setup request
-    | fail "default setup should yield goal features"
-  require (rows == (← arrField legacy "rows")) "default setup changed existing goal features"
-
-  let mismatch := { setup with name := `Wrong.Module }
+-- Each setup field the host passes must take effect, and each failure must stay
+-- a structured error rather than fall back to the source header or search path.
+private unsafe def testProofGoalSetupControls : IO Unit := do
+  let request := goalRequest proofGoalSource "goalFeatureSource"
+  let mismatch := { goalSetup with name := `Wrong.Module }
   let .error mismatchError ← LeanSemanticSearch.GoalElaboration.runWithSetup mismatch request
     | fail "a setup for another module must refuse"
   require (mismatchError.kind == .invalidRequest) "module mismatch must remain a request error"
 
   let implicitSource := "import Init\n\ntheorem implicitGoal (x : α) : x = x := by\n  skip\n  rfl\n"
-  let implicitRequest := Json.mkObj
-    [("module", Json.str "LeanSemanticSearchTest.GoalSource"),
-     ("source_text", Json.str implicitSource), ("declaration", Json.str "implicitGoal")]
-  let defaultResponse ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures implicitRequest.compress)
-  require (!(← arrField defaultResponse "rows").isEmpty) s!"legacy default options should permit auto-implicits: {defaultResponse.compress}"
+  let implicitRequest := goalRequest implicitSource "implicitGoal"
+  let .ok implicitRows ← LeanSemanticSearch.GoalElaboration.runWithSetup goalSetup implicitRequest
+    | fail "Lean's default options should permit auto-bound implicits"
+  require (!implicitRows.isEmpty) "default options should yield the implicit proof state"
   let some strictOptions := LeanOptions.fromOptions? (Options.empty.setBool `autoImplicit false)
     | fail "serializable setup options expected"
   let .error strictError ← LeanSemanticSearch.GoalElaboration.runWithSetup
-      { setup with options := strictOptions } implicitRequest
+      { goalSetup with options := strictOptions } implicitRequest
     | fail "Lake autoImplicit=false must refuse the different implicit proof state"
   require (strictError.kind == .invalidRequest) "source option failure must remain a structured request error"
 
   let overriddenSource := proofGoalSource.replace "import Init" "import LeanSemanticSearchTest.MissingForSetup"
-  let overriddenRequest := Json.mkObj
-    [("module", Json.str "LeanSemanticSearchTest.GoalSource"),
-     ("source_text", Json.str overriddenSource), ("declaration", Json.str "goalFeatureSource")]
   let .ok overriddenRows ← LeanSemanticSearch.GoalElaboration.runWithSetup
-      { setup with imports? := some #[{ module := `Init }] } overriddenRequest
+      { goalSetup with imports? := some #[{ module := `Init }] }
+      (goalRequest overriddenSource "goalFeatureSource")
     | fail "Lake imports must supersede the source header"
   require (!overriddenRows.isEmpty) "Lake-selected imports should produce goal features"
 
   let absentPlugin := (← IO.currentDir) / ".lake" / "LeanSemanticSearchTest.missing-plugin.dylib"
   require (!(← absentPlugin.pathExists)) "missing-plugin control path must not exist"
   let .error pluginError ← LeanSemanticSearch.GoalElaboration.runWithSetup
-      { setup with plugins := #[Plugin.ofFilePath absentPlugin] } request
+      { goalSetup with plugins := #[Plugin.ofFilePath absentPlugin] } request
     | fail "a missing setup plugin must refuse instead of using default imports"
   require (pluginError.kind == .importFailed) "missing plugin must remain an import error"
 
@@ -277,19 +262,18 @@ private unsafe def testProofGoalFeaturesWithSetup : IO Unit := do
   let artifacts : NameMap ImportArtifacts := ({} : NameMap ImportArtifacts).insert `Init
     (.ofArrays #[#[absentArtifact], #[]])
   let .error artifactError ← LeanSemanticSearch.GoalElaboration.runWithSetup
-      { setup with importArts := artifacts } request
+      { goalSetup with importArts := artifacts } request
     | fail "a missing Lake-selected artifact must not fall back to the search path"
   require (artifactError.kind == .importFailed) "missing artifact must remain an import error"
 
 private unsafe def testDiagnostics : IO Unit := do
-  let malformed ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures "{")
+  let malformed ← parseJson (← LeanSemanticSearch.Capability.declarationFeatures "{")
   let malformedDiagnostics ← arrField malformed "diagnostics"
   require (!malformedDiagnostics.isEmpty) "malformed JSON should return diagnostics"
-  let missingSource :=
-    Json.mkObj [("module", Json.str "LeanSemanticSearchTest.GoalSource")]
-  let missing ← parseJson (← LeanSemanticSearch.Capability.proofGoalFeatures missingSource.compress)
-  let missingDiagnostics ← arrField missing "diagnostics"
-  require (!missingDiagnostics.isEmpty) "missing proof-goal source should return diagnostics"
+  let missingSource := Json.mkObj [("module", Json.str "LeanSemanticSearchTest.GoalSource")]
+  let .error missingError ← LeanSemanticSearch.GoalElaboration.runWithSetup goalSetup missingSource
+    | fail "a proof-goal request without source must refuse"
+  require (missingError.kind == .invalidRequest) "missing proof-goal source must be a request error"
 
 private def requireInvalidJsonResponse
     (text command commandVersion : String) : IO Unit := do
@@ -317,7 +301,8 @@ private def requireInvalidJsonResponse
     "duplicate keys must be rejected by the JSON parser before request validation"
 
 -- Lean 4.36 rejects duplicate JSON object keys, including nested and escaped
--- keys. Both feature exports must keep these parser failures in the envelope.
+-- keys. The declaration command must keep these parser failures in the
+-- envelope. Proof-goal requests arrive as parsed `Json`; their host parses them.
 private unsafe def testDuplicateJsonKeys : IO Unit := do
   let declarationRequests :=
     #[ r#"{"modules":[{"module":"Init"}],"modules":[{"module":"Init"}]}"#
@@ -329,29 +314,18 @@ private unsafe def testDuplicateJsonKeys : IO Unit := do
       (← LeanSemanticSearch.Capability.declarationFeatures request)
       LeanSemanticSearch.JsonSupport.declarationCommand
       LeanSemanticSearch.JsonSupport.declarationFeatureCommandVersion
-  let goalRequests :=
-    #[ r#"{"module":"DuplicateKeysGoal","module":"DuplicateKeysGoal","source_text":"import Init\n\ntheorem t : True := by\n  trivial","declaration":"t"}"#
-     , r#"{"module":"DuplicateKeysGoal","source_text":"import Init\n\ntheorem t : True := by\n  trivial","declaration":"t","position":{"line":4,"line":4,"column":3}}"#
-     , r#"{"module":"DuplicateKeysGoal","\u006dodule":"DuplicateKeysGoal","source_text":"import Init\n\ntheorem t : True := by\n  trivial","declaration":"t"}"#
-     ]
-  for request in goalRequests do
-    requireInvalidJsonResponse
-      (← LeanSemanticSearch.Capability.proofGoalFeatures request)
-      LeanSemanticSearch.JsonSupport.proofGoalCommand
-      LeanSemanticSearch.JsonSupport.proofGoalFeatureCommandVersion
 
 unsafe def main (_args : List String) : IO UInt32 := do
   Lean.enableInitializersExecution
   initSearchPath (← getBuildDir)
   testCanonicalAlphaStability
   testGoldenFingerprints
-  testMetadataAndDoctor
   testGeneratedFiltering
   testDeclarationFeatures
   testDeclarationFeaturesPreservesAmbientSearchPath
   testProofGoalFeatures
   testProofGoalFeaturesPreservesAmbientSearchPath
-  testProofGoalFeaturesWithSetup
+  testProofGoalSetupControls
   testDiagnostics
   testDuplicateJsonKeys
   pure 0

@@ -19,8 +19,9 @@ The split follows information ownership, not algorithm steps. Source elaboration
 because they share source maps, info trees, and metavariable contexts. Feature assignment is separate because
 declaration and proof-goal extraction both use it.
 
-Search-path construction belongs to the caller that embeds the capability. Hosted exports import and elaborate against
-Lean's current module search path; they do not initialize that path or rebuild it from process environment.
+Search-path construction belongs to the host. `Capability.declarationFeatures` imports against Lean's current module
+search path, and `GoalElaboration.runWithSetup` uses the Lake module setup the host passes. Neither initializes the
+search path or rebuilds it from the process environment.
 
 ## Declaration Features
 
@@ -48,5 +49,5 @@ tools, but they are not semantic input here.
 ## Diagnostics
 
 Command failures stay inside the command envelope as structured diagnostics. Malformed JSON, invalid selectors, import
-failures, and unavailable proof states return rows `[]` with an error diagnostic. This keeps the generic worker
-transport separate from semantic command policy.
+failures, and unavailable proof states return rows `[]` with an error diagnostic. This keeps the host's process and
+transport handling separate from semantic command policy.

@@ -1,6 +1,6 @@
 //! Stable cross-repository contract for Lean semantic search.
 //!
-//! The contract describes semantic facts and capability envelopes without
+//! The contract describes semantic facts and command envelopes without
 //! exposing expression traversal, feature-key encoding, storage layout, or
 //! downstream report policy. Opaque keys are equality tokens: callers may
 //! store and compare them under their matching version fields, but must not
@@ -9,11 +9,17 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Version of the shared capability envelope used by this crate.
+/// Version of the command response envelope.
 pub const CAPABILITY_SCHEMA_VERSION: &str = "lean-semantic-search.capability.v1";
+
+/// Name of the declaration feature command, as its responses carry it.
+pub const DECLARATION_FEATURES_COMMAND: &str = "declaration_features";
 
 /// Version marker for declaration feature command responses.
 pub const DECLARATION_FEATURE_COMMAND_VERSION: &str = "declaration_features.v1";
+
+/// Name of the proof-goal feature command, as its responses carry it.
+pub const PROOF_GOAL_FEATURES_COMMAND: &str = "proof_goal_features";
 
 /// Version marker for proof-goal feature command responses.
 pub const PROOF_GOAL_FEATURE_COMMAND_VERSION: &str = "proof_goal_features.v1";
@@ -24,60 +30,7 @@ pub const CANONICAL_FEATURE_VERSION: &str = "canonical.expr.v3";
 /// Version marker for semantic role-feature rows.
 pub const SEMANTIC_FEATURE_VERSION: &str = "features.roles.v3";
 
-/// One command advertised through generic worker capability metadata.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CommandMetadata {
-    /// Downstream-owned command name.
-    pub name: String,
-    /// Version of that command's request/response schema.
-    pub version: String,
-}
-
-impl CommandMetadata {
-    /// Build command metadata with owned strings.
-    #[must_use]
-    pub fn new(name: impl Into<String>, version: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            version: version.into(),
-        }
-    }
-}
-
-/// One named capability advertised through generic worker capability metadata.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CapabilityFact {
-    /// Stable capability name.
-    pub name: String,
-    /// Version of the named capability.
-    pub version: String,
-}
-
-impl CapabilityFact {
-    /// Build capability metadata with owned strings.
-    #[must_use]
-    pub fn new(name: impl Into<String>, version: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            version: version.into(),
-        }
-    }
-}
-
-/// Generic metadata shape transported by `lean-rs-worker`.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct CapabilityMetadata {
-    /// Commands implemented by the loaded Lean package.
-    pub commands: Vec<CommandMetadata>,
-    /// Capability facts implemented by the loaded Lean package.
-    pub capabilities: Vec<CapabilityFact>,
-    /// Lean version reported by the package when available.
-    pub lean_version: Option<String>,
-    /// Downstream-owned metadata that does not affect the worker substrate.
-    pub extra: Option<Value>,
-}
-
-/// Severity for both doctor diagnostics and feature-command diagnostics.
+/// Severity of a command or retrieval diagnostic.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticSeverity {
@@ -118,15 +71,6 @@ impl Diagnostic {
             details,
         }
     }
-}
-
-/// Generic doctor report shape transported by `lean-rs-worker`.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DoctorReport {
-    /// Structured package health diagnostics.
-    pub diagnostics: Vec<Diagnostic>,
-    /// Optional package-owned metadata.
-    pub metadata: Option<Value>,
 }
 
 /// One Lake module request target.
@@ -285,115 +229,11 @@ pub struct CommandResponse<Row> {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-impl<Row> CommandResponse<Row> {
-    /// Build an empty response with structured diagnostics.
-    #[must_use]
-    pub fn empty(
-        command: impl Into<String>,
-        command_version: impl Into<String>,
-        feature_version: impl Into<String>,
-        diagnostics: Vec<Diagnostic>,
-    ) -> Self {
-        Self {
-            schema_version: CAPABILITY_SCHEMA_VERSION.to_owned(),
-            command: command.into(),
-            command_version: command_version.into(),
-            feature_version: feature_version.into(),
-            rows: Vec::new(),
-            diagnostics,
-        }
-    }
-}
-
-/// Terminal metadata for the optional streaming declaration-feature export.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct StreamSummary {
-    /// Shared response envelope version.
-    pub schema_version: String,
-    /// Command name that produced the stream.
-    pub command: String,
-    /// Version of this command's request/response schema.
-    pub command_version: String,
-    /// Feature algorithm version represented by the stream.
-    pub feature_version: String,
-    /// Number of rows emitted by the command.
-    pub rows: u64,
-    /// Structured terminal diagnostics.
-    pub diagnostics: Vec<Diagnostic>,
-}
-
 #[cfg(test)]
 mod tests {
-    use serde_json::{Value, json, to_value};
+    use serde_json::{json, to_value};
 
-    use super::{
-        CapabilityFact, CapabilityMetadata, CommandMetadata, DeclarationFeatureRequest, Diagnostic, DiagnosticSeverity,
-        DoctorReport, ModuleSpec,
-    };
-
-    #[test]
-    fn metadata_serializes_to_generic_worker_shape() -> Result<(), String> {
-        let metadata = CapabilityMetadata {
-            commands: vec![CommandMetadata::new("metadata", "v1")],
-            capabilities: vec![CapabilityFact::new("rows.json", "v1")],
-            lean_version: Some("lean-4".to_owned()),
-            extra: Some(json!({ "schema_version": "test" })),
-        };
-
-        let value = to_value(metadata).map_err(|error| error.to_string())?;
-        let first_command = first_object(&value, "commands")?;
-        let first_capability = first_object(&value, "capabilities")?;
-
-        assert_eq!(first_command.get("name").and_then(Value::as_str), Some("metadata"));
-        assert_eq!(first_command.get("version").and_then(Value::as_str), Some("v1"));
-        assert_eq!(first_capability.get("name").and_then(Value::as_str), Some("rows.json"));
-        assert_eq!(value.get("lean_version").and_then(Value::as_str), Some("lean-4"));
-        assert_eq!(
-            value
-                .get("extra")
-                .and_then(|extra| extra.get("schema_version"))
-                .and_then(Value::as_str),
-            Some("test")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn doctor_serializes_to_generic_worker_shape() -> Result<(), String> {
-        let report = DoctorReport {
-            diagnostics: vec![Diagnostic::new(
-                DiagnosticSeverity::Pass,
-                "features.ok",
-                "features ready",
-                Some(json!({ "check": "boundary" })),
-            )],
-            metadata: Some(json!({ "schema_version": "test" })),
-        };
-
-        let value = to_value(report).map_err(|error| error.to_string())?;
-        let first_diagnostic = first_object(&value, "diagnostics")?;
-
-        assert_eq!(first_diagnostic.get("severity").and_then(Value::as_str), Some("pass"));
-        assert_eq!(
-            first_diagnostic.get("code").and_then(Value::as_str),
-            Some("features.ok")
-        );
-        assert_eq!(
-            first_diagnostic
-                .get("details")
-                .and_then(|details| details.get("check"))
-                .and_then(Value::as_str),
-            Some("boundary")
-        );
-        assert_eq!(
-            value
-                .get("metadata")
-                .and_then(|metadata| metadata.get("schema_version"))
-                .and_then(Value::as_str),
-            Some("test")
-        );
-        Ok(())
-    }
+    use super::{DeclarationFeatureRequest, ModuleSpec};
 
     fn declaration_request() -> DeclarationFeatureRequest {
         DeclarationFeatureRequest {
@@ -433,13 +273,5 @@ mod tests {
         let decoded: DeclarationFeatureRequest = serde_json::from_value(value)?;
         assert_eq!(decoded, request);
         Ok(())
-    }
-
-    fn first_object<'value>(value: &'value Value, field: &str) -> Result<&'value Value, String> {
-        value
-            .get(field)
-            .and_then(Value::as_array)
-            .and_then(|items| items.first())
-            .ok_or_else(|| format!("missing first object in `{field}`"))
     }
 }

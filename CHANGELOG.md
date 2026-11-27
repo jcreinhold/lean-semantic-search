@@ -19,12 +19,23 @@ must have a corresponding `## [X.Y.Z]` section here.
   chain keeps the SDK's `WriterFailure`.
 - The opt-in runtime build test reads the writer helper from `LEAN_RS_WRITER_EXECUTABLE`, the SDK's current name, in
   place of `LEAN_HOST_MCP_WRITER_EXECUTABLE`, which lean-rs 0.11 removes. The lockfile now resolves lean-rs 0.10.17.
+- Breaking: `DECLARATION_FEATURES_COMMAND` and `PROOF_GOAL_FEATURES_COMMAND` moved from the deleted capability crate to
+  `lean-semantic-search-contract`, beside the command versions.
+- Breaking: `Capability.declarationFeatures` is a plain Lean function with no `@[export]` symbol.
+  `GoalElaboration.runWithSetup` is the only proof-goal entry point. Runtime source digest updated.
 
 ### Removed
 
 - Breaking: runtime `build_cached` (the SDK's own writer selection), `SemanticSearchRuntime::dependency`, the public
   `PACKAGE_NAME` constant and `compute_runtime_source_digest`. The runtime crate no longer depends on
   `lean-rs-worker-protocol` or `lean-semantic-search-capability`.
+- Breaking: the FFI worker capability. The `lean-semantic-search-capability` crate is gone with its export names,
+  metadata, doctor report and empty-response helpers. In Lean: the `metadata`, `doctor`, `proofGoalFeatures` and stub
+  `streamDeclarationFeatures` exports, `GoalElaboration.run`, and `LeanCompat.selectGoalSnapshot`, the path that
+  elaborated against the ambient search path without a Lake setup. In the contract: `CommandMetadata`, `CapabilityFact`,
+  `CapabilityMetadata`, `DoctorReport`, `StreamSummary` and `CommandResponse::empty`.
+- The opt-in native worker search smoke (`crates/retrieval/tests/native_search.rs`) and the opt-in Python setup
+  regression (`tests/goal_setup.py`). Both drove SDK worker or host behavior that this repository does not own.
 
 ## [0.7.9]
 

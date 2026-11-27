@@ -4,10 +4,11 @@ import LeanSemanticSearch.LeanCompat
 /-!
 Source-backed proof-goal extraction.
 
-The exported command passes source text and a selector. This module parses that
-request and maps the boundary's result onto the command envelope; the actual
-elaboration, tactic selection, and goal translation live behind
-`LeanCompat.selectGoalSnapshot`, which exposes only semantic feature facts.
+A host passes source text, a goal selector, and the module setup that Lake
+selected for that source. This module parses the request and turns the
+boundary's result into feature rows; elaboration, tactic selection, and goal
+translation live behind `LeanCompat.selectGoalSnapshotWithSetup`, which exposes
+only semantic feature facts.
 -/
 
 namespace LeanSemanticSearch.GoalElaboration
@@ -56,25 +57,17 @@ def parseRequest (payload : Json) : Except JsonSupport.Error GoalRequest := do
       position?
       namespaceName? := namespace? }
 
-private unsafe def runUsing
-    (selectSnapshot : GoalRequest → IO (Except LeanCompat.CompatError LeanCompat.GoalSnapshot))
-    (payload : Json) : IO (Except JsonSupport.Error (Array Json)) := do
+/-- Compute the proof-goal feature rows for one request, elaborating its source
+    with the Lake setup `lake setup-file` printed for that source. The caller
+    wraps the result in the command envelope with `JsonSupport.responseJson` or
+    `JsonSupport.errorResponseJson` and `JsonSupport.proofGoalCommand`. -/
+unsafe def runWithSetup (setup : Lean.ModuleSetup) (payload : Json) :
+    IO (Except JsonSupport.Error (Array Json)) := do
   match parseRequest payload with
   | .error err => pure <| .error err
   | .ok request =>
-      match ← selectSnapshot request with
+      match ← LeanCompat.selectGoalSnapshotWithSetup setup request with
       | .error compatErr => pure <| .error (JsonSupport.Error.ofCompat compatErr)
       | .ok snapshot => pure <| .ok #[GoalFeatures.rowFromSnapshot snapshot]
-
-unsafe def run (payload : Json) : IO (Except JsonSupport.Error (Array Json)) :=
-  runUsing LeanCompat.selectGoalSnapshot payload
-
-/-- Compute the existing goal-feature rows with the exact Lake setup selected by
-    a separately supervised Lean process. Request parsing, goal selectors, error
-    mapping and row encoding are identical to `run`; the current FFI entry point
-    continues to use `run` and does not accept or load a setup. -/
-unsafe def runWithSetup (setup : Lean.ModuleSetup) (payload : Json) :
-    IO (Except JsonSupport.Error (Array Json)) :=
-  runUsing (LeanCompat.selectGoalSnapshotWithSetup setup) payload
 
 end LeanSemanticSearch.GoalElaboration

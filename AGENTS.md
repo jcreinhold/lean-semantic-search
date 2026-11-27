@@ -2,7 +2,8 @@
 
 `lean-semantic-search` is the **shared semantic-search package** for Lean tooling. It is the boundary where reusable
 Lean semantic facts live, consumed by two downstream callers it does not contain: `lean-dup` (duplicate search) and
-`lean-host-mcp` (proof-agent search). It depends on `lean-rs`/`lean-rs-worker` only as a generic transport substrate.
+`lean-host-mcp` (proof-agent search). It uses `lean-rs` only to materialize its Lean package and run `lake build` under
+the SDK's shared writer.
 
 The repo is a dual Lean + Rust workspace: the **Lean package** does semantic feature extraction; the **Rust crates**
 define the stable JSON contract and command identity that cross repository boundaries. There is no retrieval, ranking,
@@ -40,15 +41,15 @@ around it.
 ## Release rule
 
 Test changes spanning the SDK and this repo together locally before pushing or tagging. Use temporary Cargo
-`[patch.crates-io]` overrides. Check the resolved crates with `cargo metadata --format-version 1`, then run the
-affected real Lean operation and this repo's required `scripts/prerelease.sh` checks. Do not publish an SDK crate just
-to test it here. Do not commit local paths or an override lockfile. When the whole change passes locally, release the
-batch upstream first, resolve the published pins, and keep the required release checks.
+`[patch.crates-io]` overrides. Check the resolved crates with `cargo metadata --format-version 1`, then run the affected
+real Lean operation and this repo's required `scripts/prerelease.sh` checks. Do not publish an SDK crate just to test it
+here. Do not commit local paths or an override lockfile. When the whole change passes locally, release the batch
+upstream first, resolve the published pins, and keep the required release checks.
 
 ## Architecture: the boundary is the point
 
 The whole design is about **what each layer is forbidden to know**. Read `docs/architecture/00-boundary.md` before
-deciding where a new concern belongs, and `docs/architecture/01-capability-contract.md` before touching export names,
+deciding where a new concern belongs, and `docs/architecture/01-capability-contract.md` before touching entry points,
 request shapes, response envelopes, or versions. Each crate/module is organized around a *hidden decision*, not around
 importance—create a new Rust crate only when it hides something (e.g. retrieval becomes a crate when candidate-search
 internals exist, never as an empty placeholder).
@@ -62,13 +63,12 @@ steps:
 - `GoalFeatures` / `GoalElaboration`: same semantic facts from an open proof goal; elaboration + goal selection live
   together because they share source maps, info trees, and metavariable contexts.
 - `Json`: command envelopes, version strings, request parsing, structured diagnostics.
-- `Capability`: the five `@[export]` entry points (the worker ABI).
+- `Capability`: `declarationFeatures`, the declaration command entry point hosts call; it imports `GoalElaboration` so
+  hosts reach `runWithSetup` through one import.
 
 **Rust crates (`crates/`)**:
 - `contract`: stable serde DTOs, opaque keys, diagnostics, version constants, response envelopes. The cross-repository
   JSON contract.
-- `capability`: worker-facing command names, export names, advertised facts, empty-diagnostic helpers. Intentionally
-  small: command identity over generic transport.
 - `retrieval`: storage-neutral semantic candidate generation over feature rows. Hides ranking weights, rarity weighting,
   fanout/posting limits, broad-head pruning, and the multi-lane bounded top-k. Callers see ranked candidates +
   feature-family explanations + diagnostics, never postings, heaps, composite scores, or raw keys. Ranks over a `Corpus`
@@ -77,16 +77,16 @@ steps:
   ranking policy in this crate. Carries its own `RETRIEVAL_POLICY_VERSION` (`lean-semantic-search.retrieval.v2`); adds
   no DTOs to `contract`. See `docs/architecture/04-persistence.md`.
 
-**The Lean exports and Rust constants must stay in lockstep.** The five `@[export lean_semantic_search_*]` functions in
-`Capability.lean` correspond one-to-one to the `*_EXPORT`/`*_COMMAND` constants in `crates/capability/src/lib.rs`, and
-the JSON shapes they emit correspond to the DTOs in `crates/contract/src/lib.rs`. Changing a command name, payload
-shape, or version in one side requires updating the other and the contract doc.
+**The Lean definitions and Rust constants must stay in lockstep.** The command names and versions in `Json.lean` match
+the constants in `crates/contract/src/lib.rs`, and the JSON shapes the entry points emit match its DTOs. Changing a
+command name, payload shape, or version on one side requires updating the other and the contract doc. Hosts call
+`Capability.declarationFeatures` and `GoalElaboration.runWithSetup` by name, so renaming either is a breaking change.
 
 ## Boundary rules
 
 These constrain changes more than the compiler does:
 
-- Do not add search semantics to `lean-rs`; use its generic worker capability transport.
+- Do not add search semantics to `lean-rs`.
 - Do not put downstream workflow policy in shared crates: no review-state fields, report presentation policy, experiment
   knobs, or production gates.
 - Do not put transport-specific or project-runtime types in shared search crates.

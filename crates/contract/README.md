@@ -2,10 +2,10 @@
 
 Stable JSON DTOs and version markers for the shared Lean semantic-search boundary.
 
-This crate owns the cross-repository contract between the Lean feature package and its Rust callers. It defines
-metadata, doctor diagnostics, module and proof-goal requests, feature rows, opaque fingerprints, role features,
-streaming summaries, and version constants. Callers may serialize, store, and compare these values according to their
-version fields, but they must not interpret opaque feature keys.
+This crate owns the cross-repository contract between the Lean feature package and its Rust callers. It defines module
+and proof-goal requests, feature rows, opaque fingerprints, role features, diagnostics, the response envelope, command
+names, and version constants. Callers may serialize, store, and compare these values according to their version fields,
+but they must not interpret opaque feature keys.
 
 Declaration requests identify modules and optional declaration ids. Proof-goal requests carry source text plus a
 module/declaration/position selector, so Lean elaborates and extracts from expressions rather than from rendered goal
@@ -22,7 +22,7 @@ lean-semantic-search-contract = "0.3"
 ```
 
 ```rust
-use lean_semantic_search_contract::CapabilityMetadata;
+use lean_semantic_search_contract::{CommandResponse, DeclarationFeatureRow};
 ```
 
 ## See also

@@ -47,9 +47,8 @@ on any failure. This runs the same gates as CI — `lake build`/`lake test`, the
 uploads or publish credentials. External SDK dependencies must already resolve from crates.io; no local override or
 `--no-verify` substitutes for that check. Use `--quick` only for iteration, never as the release gate.
 
-For runtime or SDK changes, also run the [native search smoke](../../../crates/retrieval/README.md#native-release-smoke)
-with a matching application-owned worker and the actual published SDK graph. It checks source-backed search, changed
-source refusal and confirmed worker closure; SDK/private authority fixture results alone do not replace that gate.
+For runtime or SDK changes, also run the ignored runtime build test (see [`crates/runtime/README.md`](../../../crates/runtime/README.md#checks))
+against the SDK graph being released. It runs the real `lake build` through the SDK's shared writer, cold and warm.
 
 ### 2. Version bump (the workspace version is the one source of truth)
 
@@ -81,17 +80,16 @@ tag `v0.2.0` → heading `## [0.2.0]` (match the existing `## [0.1.0]`). The wor
 on `^## \[X.Y.Z\]`) as the GitHub Release body and fails if it is missing or empty; `prerelease.sh` runs the identical
 check locally.
 
-### 4. Contract/version lockstep check (only if a schema or algorithm version changed)
+### 4. Contract/version lockstep check (only if a schema, algorithm version, or command name changed)
 
-The Lean exports and Rust constants must stay in lockstep (see `AGENTS.md`). If this release changed any schema or
-algorithm version, confirm both sides moved together, in the commits being released:
+The Lean definitions and Rust constants must stay in lockstep (see `AGENTS.md`). If this release changed any of them,
+confirm both sides moved together, in the commits being released:
 
-- Each version constant in `crates/contract/src/lib.rs`, plus `RETRIEVAL_POLICY_VERSION` in
-  `crates/retrieval/src/policy.rs`, must equal its mirror in `lean/LeanSemanticSearch/Json.lean`. `AGENTS.md` lists the
-  constants and their current values; for any this release touched, compare the Rust and Lean sides directly rather than
-  trusting that list to be current.
-- Every `@[export lean_semantic_search_*]` in `lean/LeanSemanticSearch/Capability.lean` still matches a
-  `*_EXPORT`/`*_COMMAND` constant in `crates/capability/src/lib.rs`.
+- Each version and command-name constant in `crates/contract/src/lib.rs` must equal its mirror in
+  `lean/LeanSemanticSearch/Json.lean`. Compare the two files directly. `RETRIEVAL_POLICY_VERSION` in
+  `crates/retrieval/src/policy.rs` has no Lean mirror.
+- If `Capability.declarationFeatures` or `GoalElaboration.runWithSetup` changed name or signature, the `CHANGELOG.md`
+  entry says so: hosts call them by name from their own Lean driver.
 
 A version is opaque to callers and comparable only under matching version fields — a drift here is a contract break, not
 a cosmetic one. If they are out of sync, fix before tagging.

@@ -4,9 +4,9 @@ This repository is the standalone semantic-search layer shared by `lean-dup` and
 
 ## Design Note
 
-`lean-rs` remains only the communication and runtime substrate. It owns Lean FFI, process startup, session lifecycle,
-generic JSON commands, generic streaming commands, timeouts, restart policy, and runtime facts. It must not learn proof
-search, duplicate search, fingerprints, role features, ranking weights, fanout policy, or candidate evidence.
+`lean-rs` is the generic Lean SDK. This package uses it to materialize its Lean source package and to run `lake build`
+under the shared writer. It must not learn proof search, duplicate search, fingerprints, role features, ranking weights,
+fanout policy, or candidate evidence.
 
 Search semantics live here because they change for different reasons than worker transport, downstream workflow, or
 proof-agent response shaping. A standalone package lets `lean-dup` and `lean-host-mcp` share semantic facts without
@@ -17,8 +17,8 @@ forcing either downstream caller to inherit the other caller's policy vocabulary
 A standalone package hides semantic feature decisions behind shared DTOs and lets each downstream caller keep its own
 presentation and workflow policy. Two alternatives were rejected:
 
-- **Put semantic search in `lean-rs`.** Makes the worker substrate depend on feature algorithms and search policy,
-  enlarging the public surface every worker user inherits.
+- **Put semantic search in `lean-rs`.** Makes the SDK depend on feature algorithms and search policy, enlarging the
+  public surface every SDK user inherits.
 - **Let `lean-host-mcp` depend directly on `lean-dup-search`.** Leaks duplicate-search workflow policy into proof-agent
   search.
 
@@ -28,15 +28,14 @@ presentation and workflow policy. Two alternatives were rejected:
 | --- | --- |
 | Lean package | Expression traversal, binder scheduling, proof-goal extraction, role-feature assignment, broad-head marking, semantic algorithm versions. |
 | Rust contract crate | Stable cross-repository JSON shapes, schema versions, opaque equality-key wrappers, diagnostic vocabulary. |
-| Rust capability crate | Export names, typed command identity, request/response serde boundaries over generic worker transport. |
 | Rust runtime crate | Runtime Lean file set, source digest, generated downstream toolchain rule, cache materialization, provenance sidecar, and explicit-sysroot Lake build. |
 
 A crate exists only to hide something. Retrieval—storage-neutral candidate generation, ranking weights, fanout and top-k
 limits, saturation diagnostics—becomes its own crate once that behavior exists, not before.
 
-The runtime crate hides package-owned capability distribution. Downstream hosts ask for a built `LeanSemanticSearch`
-capability for a specific toolchain/sysroot; they do not copy `lean/`, reconstruct source digests, or decide which Lean
-files ship at runtime.
+The runtime crate hides package distribution. Downstream hosts ask for a built `LeanSemanticSearch` package for a
+specific toolchain and sysroot; they do not copy `lean/`, reconstruct source digests, or decide which Lean files ship at
+runtime.
 
 ## What Must Not Leak
 

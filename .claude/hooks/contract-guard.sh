@@ -8,31 +8,27 @@
 # PreToolUse veto) would be wrong here: lockstep spans two files in two
 # languages, so the first of two necessary edits must be allowed through.
 #
-# The two contracts (AGENTS.md, docs/architecture/01-capability-contract.md):
+# The contract (AGENTS.md, docs/architecture/01-capability-contract.md):
 #
-#   1. VERSION LOCKSTEP. The contract version *values* (canonical.expr.vN,
-#      features.roles.vN, features.role_key.vN, declaration_features.vN,
-#      proof_goal_features.vN, lean-semantic-search.capability.vN) are defined
-#      as constants in `crates/contract` and mirrored as defs in the Lean
-#      `Json` module. Changing one of those value literals means the mirror
-#      side AND docs/architecture/01-capability-contract.md must move in the
-#      same change. There is no cross-language test that catches drift.
+#   The contract version *values* (canonical.expr.vN, features.roles.vN,
+#   declaration_features.vN, proof_goal_features.vN,
+#   lean-semantic-search.capability.vN) and the command names
+#   ("declaration_features", "proof_goal_features") are defined as constants
+#   in `crates/contract` and mirrored as defs in the Lean `Json` module.
+#   features.role_key.vN lives only in `Json.lean`: role keys are opaque to
+#   Rust. Changing one of those literals means the mirror side AND
+#   docs/architecture/01-capability-contract.md must move in the same change.
+#   There is no cross-language test that catches drift.
 #
-#      The retrieval policy version (lean-semantic-search.retrieval.vN /
-#      RETRIEVAL_POLICY_VERSION) is deliberately NOT part of this lockstep:
-#      it versions a ranking decision, not a Lean fact, so it lives only in
-#      `crates/retrieval` and is mirrored in neither Json.lean nor the
-#      capability contract doc (see docs/architecture/03-retrieval.md and
-#      04-persistence.md). It gets its own, separate reminder.
-#
-#   2. EXPORT/COMMAND LOCKSTEP. The five `@[export lean_semantic_search_*]`
-#      functions in Capability.lean correspond one-to-one to the
-#      *_EXPORT / *_COMMAND constants in crates/capability/src/lib.rs and
-#      the advertised commands in the contract doc. Rename/add/remove one
-#      and all three must move together.
+#   The retrieval policy version (lean-semantic-search.retrieval.vN /
+#   RETRIEVAL_POLICY_VERSION) is deliberately NOT part of this lockstep:
+#   it versions a ranking decision, not a Lean fact, so it lives only in
+#   `crates/retrieval` and is mirrored in neither Json.lean nor the
+#   capability contract doc (see docs/architecture/03-retrieval.md and
+#   04-persistence.md). It gets its own, separate reminder.
 #
 # To avoid false positives, the hook fires only when an edit actually *changes*
-# the set of contract tokens (version value literals, or export/command names),
+# the set of contract tokens (version or command-name literals),
 # not merely because the edited file *contains* one. The signal is a diff of the
 # matched tokens between the committed (HEAD) and working-tree copies of the
 # file: adding an import next to `def version` leaves that set unchanged and is
@@ -80,24 +76,26 @@ tokens_changed() {
 
 msgs=()
 
-# 1. Version lockstep. Match the version *value* literals, not bare
-#    identifier references, so importing/using a constant by name does not
-#    fire. The mirrored contract versions and the retrieval-only policy
-#    version get separate, accurate reminders.
-contract_version_re='canonical\.expr\.v[0-9]|features\.roles\.v[0-9]|features\.role_key\.v[0-9]|lean-semantic-search\.capability\.v[0-9]|(declaration|proof_goal)_features\.v[0-9]'
+# Match the version and command-name *value* literals, not bare identifier
+# references, so importing/using a constant by name does not fire. The
+# mirrored contract values and the retrieval-only policy version get separate,
+# accurate reminders.
+contract_version_re='canonical\.expr\.v[0-9]|features\.roles\.v[0-9]|features\.role_key\.v[0-9]|lean-semantic-search\.capability\.v[0-9]|(declaration|proof_goal)_features\.v[0-9]|"(declaration|proof_goal)_features"'
 retrieval_version_re='lean-semantic-search\.retrieval\.v[0-9]'
 if tokens_changed "$contract_version_re" "$file"; then
 	msgs+=("$(
 		cat <<EOF
-• You changed a contract version value in $file. These are mirrored across
-  the Lean↔Rust boundary and have no cross-language test, so move all three
-  together:
+• You changed a contract version or command name in $file. These are
+  mirrored across the Lean↔Rust boundary and have no cross-language test, so
+  move all three together:
     - crates/contract/src/lib.rs constants: CAPABILITY_SCHEMA_VERSION,
-      DECLARATION_FEATURE_COMMAND_VERSION, PROOF_GOAL_FEATURE_COMMAND_VERSION,
+      DECLARATION_FEATURES_COMMAND, DECLARATION_FEATURE_COMMAND_VERSION,
+      PROOF_GOAL_FEATURES_COMMAND, PROOF_GOAL_FEATURE_COMMAND_VERSION,
       CANONICAL_FEATURE_VERSION, SEMANTIC_FEATURE_VERSION
     - lean/LeanSemanticSearch/Json.lean defs: schemaVersion,
-      declarationFeatureCommandVersion, proofGoalFeatureCommandVersion,
-      semanticFeatureVersion, roleKeyVersion
+      declarationCommand, declarationFeatureCommandVersion, proofGoalCommand,
+      proofGoalFeatureCommandVersion, semanticFeatureVersion, and
+      roleKeyVersion (Lean only)
     - docs/architecture/01-capability-contract.md
 EOF
 	)")
@@ -115,30 +113,6 @@ if tokens_changed "$retrieval_version_re" "$file"; then
 EOF
 	)")
 fi
-
-# 2. Export/command lockstep. Only the two files that own the worker ABI,
-#    and only when the body touches an export/command symbol.
-case "$file" in
-*/lean/LeanSemanticSearch/Capability.lean | lean/LeanSemanticSearch/Capability.lean | \
-	*/crates/capability/src/lib.rs | crates/capability/src/lib.rs)
-	# Capture whole symbols so `-Eo` can diff them: the export function names
-	# and the screaming-snake *_EXPORT / *_COMMAND constants. A bare `_EXPORT`
-	# fragment would collapse every constant to one token and miss renames.
-	export_command_re='lean_semantic_search_[a-z0-9_]+|[A-Z][A-Z0-9_]*_(EXPORT|COMMAND)'
-	if tokens_changed "$export_command_re" "$file"; then
-		msgs+=("$(
-			cat <<EOF
-• You touched a worker export/command name in $file. The five
-  @[export lean_semantic_search_*] functions in Capability.lean map
-  one-to-one to the *_EXPORT / *_COMMAND constants in
-  crates/capability/src/lib.rs and the advertised commands in
-  docs/architecture/01-capability-contract.md. Rename, add, or remove an
-  entry in all three together.
-EOF
-		)")
-	fi
-	;;
-esac
 
 if [ "${#msgs[@]}" -gt 0 ]; then
 	printf 'contract-guard:\n' >&2

@@ -12,7 +12,6 @@ import LeanSemanticSearch.RoleFeatures
 /-!
 Root module for the Lean semantic search package.
 
-The package exports capability metadata, doctor diagnostics, declaration
-features, proof-goal features, and the optional streaming declaration-feature
-entry point.
+Hosts call `Capability.declarationFeatures` for declaration features and
+`GoalElaboration.runWithSetup` for proof-goal features.
 -/
