@@ -266,6 +266,36 @@ private unsafe def testProofGoalSetupControls : IO Unit := do
     | fail "a missing Lake-selected artifact must not fall back to the search path"
   require (artifactError.kind == .importFailed) "missing artifact must remain an import error"
 
+-- Goal elaboration reads the whole file, as `lean` does: a command sees the
+-- header, and diagnostics carry file lines.
+private unsafe def testProofGoalSeesTheHeader : IO Unit := do
+  let headerSource := String.intercalate "\n"
+    [ "import Lean"
+    , ""
+    , "open Lean Elab Command in"
+    , "elab \"#require_header\" : command => do"
+    , "  unless (← getFileMap).source.startsWith \"import Lean\" do"
+    , "    throwError \"the file was elaborated without its header\""
+    , ""
+    , "#require_header"
+    , ""
+    , "theorem headerGoal (p : Prop) (hp : p) : p := by"
+    , "  exact hp"
+    ]
+  let .ok rows ← LeanSemanticSearch.GoalElaboration.runWithSetup goalSetup
+      (goalRequest headerSource "headerGoal")
+    | fail "a command that reads the file must see its header"
+  require (!rows.isEmpty) "the header-reading source should yield goal features"
+
+  let broken := proofGoalSource ++ "\n\ntheorem brokenGoal : False := by\n  exact True.intro\n"
+  let .error brokenError ← LeanSemanticSearch.GoalElaboration.runWithSetup goalSetup
+      (goalRequest broken "brokenGoal")
+    | fail "a source with an elaboration error must refuse"
+  let some details := brokenError.details | fail "an elaboration error must carry its messages"
+  let some message := (← arrField details "messages")[0]? | fail "expected an elaboration message"
+  let .ok line := message.getObjValAs? Nat "line" | fail "an elaboration message must carry a line"
+  require (line == 8) s!"elaboration messages must carry file lines, not body lines; got line {line}"
+
 private unsafe def testDiagnostics : IO Unit := do
   let malformed ← parseJson (← LeanSemanticSearch.Capability.declarationFeatures "{")
   let malformedDiagnostics ← arrField malformed "diagnostics"
@@ -326,6 +356,7 @@ unsafe def main (_args : List String) : IO UInt32 := do
   testProofGoalFeatures
   testProofGoalFeaturesPreservesAmbientSearchPath
   testProofGoalSetupControls
+  testProofGoalSeesTheHeader
   testDiagnostics
   testDuplicateJsonKeys
   pure 0

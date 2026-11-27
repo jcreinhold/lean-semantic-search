@@ -162,39 +162,13 @@ unsafe def collectDeclSources (req : ImportRequest) : IO (Except CompatError (Ar
 
 /-! ## Proof-goal selection -/
 
--- Distinct from the owned `SourceSpan`: this is scratch for body↔file
--- coordinate math during goal selection (it is shifted by the header line
--- offset), never returned across the boundary. Same shape, different job.
-private structure SourceSpanInternal where
-  startLine : Nat
-  startColumn : Nat
-  endLine : Nat
-  endColumn : Nat
-
-private structure SourceDocument where
-  source : String
-  fileMap : FileMap
-  bodyFileMap : FileMap
-  lineOffset : Nat
-
 private structure TacticCandidate where
-  span : SourceSpanInternal
+  span : SourceSpan
   ctx : ContextInfo
   mctxBefore : MetavarContext
   goalsBefore : List MVarId
 
-private def SourceDocument.fromSources (source bodySource : String) (lineOffset : Nat) :
-    SourceDocument :=
-  { source, fileMap := source.toFileMap, bodyFileMap := bodySource.toFileMap, lineOffset }
-
-private def SourceDocument.fileLineToBody (doc : SourceDocument) (line : Nat) : Nat :=
-  if line > doc.lineOffset then line - doc.lineOffset else 0
-
-private def SourceDocument.bodySpanToFile (doc : SourceDocument) (span : SourceSpanInternal) :
-    SourceSpanInternal :=
-  { span with startLine := span.startLine + doc.lineOffset, endLine := span.endLine + doc.lineOffset }
-
-private def rangeOfStx (fileMap : FileMap) (stx : Syntax) : Option SourceSpanInternal :=
+private def rangeOfStx (fileMap : FileMap) (stx : Syntax) : Option SourceSpan :=
   match stx.getRange? with
   | none => none
   | some ⟨sp, ep⟩ =>
@@ -206,7 +180,7 @@ private def rangeOfStx (fileMap : FileMap) (stx : Syntax) : Option SourceSpanInt
           endLine := e.line
           endColumn := e.column + 1 }
 
-private def rangeContains (span : SourceSpanInternal) (line column : Nat) : Bool :=
+private def rangeContains (span : SourceSpan) (line column : Nat) : Bool :=
   if line < span.startLine || line > span.endLine then
     false
   else if line == span.startLine && column < span.startColumn then
@@ -221,7 +195,7 @@ private def rangeContains (span : SourceSpanInternal) (line column : Nat) : Bool
 -- dominates column difference (one line always outweighs any column delta), so
 -- line span is weighted by a constant larger than any realistic column count
 -- rather than comparing lines and columns as separate keys.
-private def rangeArea (span : SourceSpanInternal) : Nat :=
+private def rangeArea (span : SourceSpan) : Nat :=
   let lineSpan := span.endLine - span.startLine
   let colSpan := span.endColumn - span.startColumn
   lineSpan * 1000000 + colSpan
@@ -239,20 +213,20 @@ private def parentDeclMatches (wanted : String) (actual? : Option Name) : Bool :
       let actualText := actual.toString
       actualText == wanted || goalShortName actualText == wanted
 
-private def spanLess (left right : SourceSpanInternal) : Bool :=
+private def spanLess (left right : SourceSpan) : Bool :=
   left.startLine < right.startLine ||
     (left.startLine == right.startLine && left.startColumn < right.startColumn) ||
     (left.startLine == right.startLine && left.startColumn == right.startColumn &&
       rangeArea left < rangeArea right)
 
-private def collectTacticCandidates (doc : SourceDocument) (trees : PersistentArray InfoTree) :
+private def collectTacticCandidates (fileMap : FileMap) (trees : PersistentArray InfoTree) :
     IO (Array TacticCandidate) := do
   let mut tactics := #[]
   for tree in trees do
     tactics ← tree.foldInfoM (init := tactics) fun ctx info acc => do
       match info with
       | .ofTacticInfo ti =>
-          match rangeOfStx doc.bodyFileMap ti.stx with
+          match rangeOfStx fileMap ti.stx with
           | some span =>
               pure <| acc.push
                 { span
@@ -264,7 +238,6 @@ private def collectTacticCandidates (doc : SourceDocument) (trees : PersistentAr
   pure <| tactics.qsort fun left right => spanLess left.span right.span
 
 private def selectCandidate
-    (doc : SourceDocument)
     (req : GoalRequest)
     (candidates : Array TacticCandidate) :
     Except CompatError (String × TacticCandidate) := do
@@ -276,15 +249,14 @@ private def selectCandidate
   let byPosition : Array TacticCandidate :=
     match req.position? with
     | some position =>
-        let bodyLine := doc.fileLineToBody position.line
         byDeclaration.filter fun candidate =>
-          rangeContains candidate.span bodyLine position.column
+          rangeContains candidate.span position.line position.column
     | none => byDeclaration
   match byPosition[0]? with
   | some candidate =>
-      let fileSpan := doc.bodySpanToFile candidate.span
+      let span := candidate.span
       let goalId :=
-        s!"{req.module}:{fileSpan.startLine}:{fileSpan.startColumn}:{fileSpan.endLine}:{fileSpan.endColumn}"
+        s!"{req.module}:{span.startLine}:{span.startColumn}:{span.endLine}:{span.endColumn}"
       pure (goalId, candidate)
   | none =>
       throw <|
@@ -324,12 +296,11 @@ private def snapshotFromCandidate (goalId : String) (candidate : TacticCandidate
       .error
         (CompatError.proofGoalUnavailable s!"selected proof goal could not be inspected: {error}")
 
-private def countNewlines (s : String) : Nat :=
-  s.foldl (init := 0) fun n c => if c == '\n' then n + 1 else n
-
+/-- The first eight messages `lean` would print, as JSON. Like `lean`, this skips
+    the messages Lean marks silent, such as a formatter plugin's records. -/
 private def messageDiagnosticsJson (messages : MessageLog) : IO Json := do
   let mut out := #[]
-  for message in messages.toArray do
+  for message in messages.toArray.filter (!·.isSilent) do
     if out.size >= 8 then
       break
     let text ← message.data.toString
@@ -347,7 +318,9 @@ private def messageDiagnosticsJson (messages : MessageLog) : IO Json := do
     the working directory and search path; relative setup paths keep Lake's
     meaning. This function loads the setup's dynlibs and plugins and uses its
     imports, artifact map, options, package and module mode, with no fallback to
-    the source header or an ambient cache. It never calls `initSearchPath`. -/
+    the source header or an ambient cache. It never calls `initSearchPath`. It
+    elaborates the whole file, header included, as `lean` does, so goal spans
+    and diagnostics carry file positions. -/
 unsafe def selectGoalSnapshotWithSetup (setup : ModuleSetup) (req : GoalRequest) :
     IO (Except CompatError GoalSnapshot) := do
   if setup.name != req.module.toName then
@@ -376,18 +349,16 @@ unsafe def selectGoalSnapshotWithSetup (setup : ModuleSetup) (req : GoalRequest)
     if let some namespaceText := req.namespaceName? then
       let head := commandState.scopes.headD { header := "", opts }
       commandState := { commandState with scopes := [{ head with currNamespace := namespaceText.toName }] }
-    let headerSource := String.Pos.Raw.extract req.sourceText 0 parserState.pos
-    let bodySource := String.Pos.Raw.extract req.sourceText parserState.pos req.sourceText.rawEndPos
-    let bodyInputCtx := Parser.mkInputContext bodySource req.fileLabel
-    let finalState ← Elab.IO.processCommands bodyInputCtx { : Parser.ModuleParserState } commandState
+    -- Elaborate the rest of the whole file, as `lean` does: elaborators and
+    -- linters see the header, and every position is a file position.
+    let finalState ← Elab.IO.processCommands inputCtx parserState commandState
     if finalState.commandState.messages.hasErrors then
       return .error <|
         CompatError.invalidRequest
           "source elaboration produced errors"
           (some <| Json.mkObj [("messages", (← messageDiagnosticsJson finalState.commandState.messages))])
-    let doc := SourceDocument.fromSources req.sourceText bodySource (countNewlines headerSource)
-    let candidates ← collectTacticCandidates doc finalState.commandState.infoState.trees
-    match selectCandidate doc req candidates with
+    let candidates ← collectTacticCandidates req.sourceText.toFileMap finalState.commandState.infoState.trees
+    match selectCandidate req candidates with
     | .error err => pure <| .error err
     | .ok (goalId, candidate) => snapshotFromCandidate goalId candidate
   catch error =>

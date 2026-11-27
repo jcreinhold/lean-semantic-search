@@ -37,7 +37,7 @@ const LAKE_DETAIL_CHARS: usize = 2000;
 
 /// Digest of the runtime Lean payload, using the file-set rule in
 /// `lean/VENDORING.md`.
-pub const RUNTIME_SOURCE_DIGEST: &str = "87aa4d89b03e4ebb7e0f7ac6f04f7a43604c8c910f3e1bcc75c540cde462cdcf";
+pub const RUNTIME_SOURCE_DIGEST: &str = "d6824cce457af1f69d05287e02f94946c2896ece19f364581828a641fd7850d5";
 /// Lean library and root module name owned by the runtime payload.
 pub const LIBRARY_NAME: &str = "LeanSemanticSearch";
 

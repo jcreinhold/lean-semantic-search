@@ -10,15 +10,19 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.8.0]
+
 ### Changed
 
+- Breaking: the runtime depends on `lean-toolchain` 0.11. Callers pass a writer and read `WriterFailure` from that
+  release.
 - Breaking: `build_cached_with_writer` now runs `lake build LeanSemanticSearch` under the writer and lets Lake decide
   what is stale. It no longer links a shared library, writes an SDK capability manifest, or keeps a macOS runpath cache
   per sysroot. `SemanticSearchRuntime` fields are private; read `package_root()`, `module_dir()` (the built `.olean`
   directory for `LEAN_PATH`) and `provenance()`. `Error` is opaque: its message names the failed step and its source
   chain keeps the SDK's `WriterFailure`.
 - The opt-in runtime build test reads the writer helper from `LEAN_RS_WRITER_EXECUTABLE`, the SDK's current name, in
-  place of `LEAN_HOST_MCP_WRITER_EXECUTABLE`, which lean-rs 0.11 removes. The lockfile now resolves lean-rs 0.10.17.
+  place of `LEAN_HOST_MCP_WRITER_EXECUTABLE`, which lean-rs 0.11 removes.
 - Breaking: `DECLARATION_FEATURES_COMMAND` and `PROOF_GOAL_FEATURES_COMMAND` moved from the deleted capability crate to
   `lean-semantic-search-contract`, beside the command versions.
 - Breaking: `Capability.declarationFeatures` is a plain Lean function with no `@[export]` symbol.
@@ -55,6 +59,10 @@ must have a corresponding `## [X.Y.Z]` section here.
   temp file, `<name>.<random>.building`, beside the destination in place of the shared `<path>.building`, and the last
   to publish wins. A build killed before it publishes leaves its temp file behind, and the next build no longer clears
   it. The store crate now depends on `tempfile` outside tests.
+- Proof-goal elaboration reads the whole file, header included, as `lean` does. It parsed the header and then elaborated
+  only the body in a new input context, so commands and linters that read the file saw it without its header, and error
+  messages carried body lines. Goal ids are unchanged. Error details now skip the messages Lean marks silent, such as a
+  formatter plugin's records. Runtime source digest updated.
 
 ## [0.7.9]
 
