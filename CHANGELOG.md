@@ -36,6 +36,11 @@ must have a corresponding `## [X.Y.Z]` section here.
   `CapabilityMetadata`, `DoctorReport`, `StreamSummary` and `CommandResponse::empty`.
 - The opt-in native worker search smoke (`crates/retrieval/tests/native_search.rs`) and the opt-in Python setup
   regression (`tests/goal_setup.py`). Both drove SDK worker or host behavior that this repository does not own.
+- Breaking: `ModuleSpec::source_root` in the contract and the Lean request field it filled. Extraction never read it.
+  Lean and the contract's deserializer still ignore a `source_root` key in request JSON.
+- The unused declaration timing in Lean: `ModuleExtraction.RunStats`, `RunOutput`, `withDeclSourcesProfiled` and
+  `DeclarationFeatures.runProfiled`. `ModuleExtraction.declSources` returns the accepted declarations. Runtime source
+  digest updated.
 
 ## [0.7.9]
 

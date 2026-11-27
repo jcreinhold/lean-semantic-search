@@ -45,7 +45,7 @@ an omitted selector when deserializing, preserving the existing downstream disco
 
 ```json
 {
-  "modules": [{ "module": "My.Project.Module", "origin": "workspace", "source_root": "/repo" }],
+  "modules": [{ "module": "My.Project.Module", "origin": "workspace" }],
   "include_private": false,
   "include_generated": false
 }

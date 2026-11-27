@@ -59,4 +59,4 @@ it from the repository root:
 } | LC_ALL=C sort -z | xargs -0 shasum -a 256 | shasum -a 256
 ```
 
-`runtime_source_digest`: `b562d416e379da1c53e19b985deee1bcab1ecb0cd33120d2d586431b1cad0ac4`
+`runtime_source_digest`: `87aa4d89b03e4ebb7e0f7ac6f04f7a43604c8c910f3e1bcc75c540cde462cdcf`

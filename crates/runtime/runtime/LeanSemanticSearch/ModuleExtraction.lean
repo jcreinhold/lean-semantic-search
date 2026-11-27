@@ -2,9 +2,9 @@ import LeanSemanticSearch.Json
 import LeanSemanticSearch.LeanCompat
 
 /-!
-Request parsing and timing for the declaration feature command.
+Request parsing for the declaration feature command.
 
-This module parses the `modules`/options request and times extraction. The
+This module parses the `modules`/options request. The module import,
 environment traversal, declaration classification, and source-range lookup live
 behind `LeanCompat.collectDeclSources`; building semantic rows from the returned
 `DeclSource`s is left to `DeclarationFeatures`, and retrieval policy stays
@@ -19,11 +19,6 @@ open LeanSemanticSearch.LeanCompat (DeclSource ImportRequest ModuleRef SourceSpa
 structure ModuleSpec where
   module : String
   origin : String
-  -- Reserved contract field (`source_root`, see crates/contract): accepted so
-  -- callers can supply it, but not yet consumed — declaration ranges come from
-  -- the imported environment, not from re-reading source. Kept for the planned
-  -- source-aware extraction; do not assume it is wired up.
-  sourceRoot? : Option String := none
   deriving Repr
 
 structure Options where
@@ -31,21 +26,10 @@ structure Options where
   includeGenerated : Bool
   deriving Repr
 
-structure RunStats where
-  importMs : Nat
-  semanticMs : Nat
-  declarationCount : Nat
-  rowCount : Nat
-
-structure RunOutput where
-  rows : Array Json
-  stats : RunStats
-
 private def parseModuleSpec (json : Json) : Except JsonSupport.Error ModuleSpec := do
   let moduleName ← JsonSupport.requiredString json "module"
   let origin? ← JsonSupport.optionalString json "origin"
-  let sourceRoot? ← JsonSupport.optionalString json "source_root"
-  pure { module := moduleName, origin := origin?.getD moduleName, sourceRoot? }
+  pure { module := moduleName, origin := origin?.getD moduleName }
 
 def parseModules (payload : Json) : Except JsonSupport.Error (Array ModuleSpec) := do
   match JsonSupport.optionalField payload "modules" with
@@ -74,31 +58,16 @@ private def importRequestOf (options : Options) (modules : Array ModuleSpec) : I
     includePrivate := options.includePrivate
     includeGenerated := options.includeGenerated }
 
-/-- Import the requested modules, hand the extracted `DeclSource`s to `operation`,
-    and report timing. The operation is pure: all `MetaM` work happens behind the
-    boundary, so the row builder never touches the compiler. -/
-unsafe def withDeclSourcesProfiled {α : Type}
-    (payload : Json)
-    (modules : Array ModuleSpec)
-    (operation : Options → Array DeclSource → Except JsonSupport.Error α) :
-    IO (Except JsonSupport.Error (α × RunStats)) := do
+/-- Import the requested modules and return the accepted declarations as owned
+    `DeclSource` records. All `MetaM` work happens behind the boundary, so the
+    row builder never touches the compiler. -/
+unsafe def declSources (payload : Json) (modules : Array ModuleSpec) :
+    IO (Except JsonSupport.Error (Array DeclSource)) := do
   match parseOptions payload with
   | .error err => pure <| .error err
   | .ok options =>
-      let importStarted ← IO.monoMsNow
       match ← LeanCompat.collectDeclSources (importRequestOf options modules) with
       | .error compatErr => pure <| .error (JsonSupport.Error.ofCompat compatErr)
-      | .ok declSources =>
-          let importFinished ← IO.monoMsNow
-          match operation options declSources with
-          | .error err => pure <| .error err
-          | .ok result =>
-              let semanticFinished ← IO.monoMsNow
-              let stats : RunStats :=
-                { importMs := importFinished - importStarted
-                  semanticMs := semanticFinished - importFinished
-                  declarationCount := declSources.size
-                  rowCount := 0 }
-              pure <| .ok (result, stats)
+      | .ok sources => pure <| .ok sources
 
 end LeanSemanticSearch.ModuleExtraction

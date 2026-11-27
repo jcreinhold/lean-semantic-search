@@ -58,10 +58,13 @@ internals exist, never as an empty placeholder).
 steps:
 - `Canonical`: expression traversal, universe normalization, binder scheduling, fingerprint keys (`canonical.expr.v3`).
 - `RoleFeatures`: role assignment, broad-head/low-signal marking, private role-key encoding.
-- `ModuleExtraction`: search-path setup, import, declaration/private/generated filtering, source-range lookup.
+- `LeanCompat`: the only code that names volatile Lean internals: module import, declaration enumeration,
+  private/generated filtering, source-range lookup, source elaboration, and tactic goal selection.
+- `ModuleExtraction`: declaration request parsing.
 - `DeclarationFeatures`: combines accepted declarations with fingerprints + role features.
-- `GoalFeatures` / `GoalElaboration`: same semantic facts from an open proof goal; elaboration + goal selection live
-  together because they share source maps, info trees, and metavariable contexts.
+- `GoalFeatures` / `GoalElaboration`: same semantic facts from an open proof goal. `GoalElaboration` parses the request;
+  elaboration and goal selection stay together in `LeanCompat.Frontend` because they share source maps, info trees, and
+  metavariable contexts.
 - `Json`: command envelopes, version strings, request parsing, structured diagnostics.
 - `Capability`: `declarationFeatures`, the declaration command entry point hosts call; it imports `GoalElaboration` so
   hosts reach `runWithSetup` through one import.

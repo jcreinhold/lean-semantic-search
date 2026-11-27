@@ -9,11 +9,13 @@ are traversed, how binders are scheduled, or how feature keys are encoded.
 | --- | --- |
 | `Canonical` | Expression traversal, universe normalization, binder scheduling, connective normalization, and fingerprint keys. |
 | `RoleFeatures` | Role assignment, broad-head marking, low-signal markers, and role-key encoding. |
-| `ModuleExtraction` | Request parsing, timing, module import through `LeanCompat.collectDeclSources`, declaration filtering, generated/private filtering, and source-range lookup. |
+| `LeanCompat` | The only code that names volatile Lean internals: module import, declaration enumeration, generated/private filtering, source-range lookup, source elaboration, info-tree walks, and tactic proof-state selection. It returns owned records, never a `Lean.Expr`. |
+| `ModuleExtraction` | Parsing the declaration request and handing it to `LeanCompat.collectDeclSources`. |
 | `DeclarationFeatures` | Combining accepted declarations with canonical fingerprints and role features. |
 | `GoalFeatures` | Computing the same semantic facts from an open proof goal's local context and target expression. |
-| `GoalElaboration` | Elaborating source text, walking the info tree, selecting a tactic proof state, and passing expressions to `GoalFeatures`. |
+| `GoalElaboration` | Parsing the proof-goal request, asking `LeanCompat.selectGoalSnapshotWithSetup` for the selected goal, and passing it to `GoalFeatures`. |
 | `Json` | Command envelopes, version strings, request parsing helpers, and structured diagnostics. |
+| `Capability` | The declaration command entry point, `declarationFeatures`. |
 
 The split follows information ownership, not algorithm steps. Source elaboration and proof-goal selection are together
 because they share source maps, info trees, and metavariable contexts. Feature assignment is separate because

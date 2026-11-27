@@ -65,23 +65,14 @@ def featureRows (declarations : Array DeclSource) : Array Json := Id.run do
     rows := rows.push (rowPayload declaration fingerprints roleFeatures markers)
   pure rows
 
-unsafe def runProfiled (payload : Json) (modules : Array ModuleExtraction.ModuleSpec) :
-    IO (Except JsonSupport.Error ModuleExtraction.RunOutput) := do
+/-- Feature rows for the declarations a request selects from its modules. -/
+unsafe def run (payload : Json) (modules : Array ModuleExtraction.ModuleSpec) :
+    IO (Except JsonSupport.Error (Array Json)) := do
   match JsonSupport.stringArrayField? payload "declaration_ids" with
   | .error err => pure <| .error err
   | .ok ids? =>
-      match ←
-        ModuleExtraction.withDeclSourcesProfiled payload modules fun _options declSources =>
-          (selectDeclarations ids? declSources).map featureRows
-      with
+      match ← ModuleExtraction.declSources payload modules with
       | .error err => pure <| .error err
-      | .ok (rows, stats) =>
-          pure <| .ok { rows, stats := { stats with rowCount := rows.size } }
-
-unsafe def run (payload : Json) (modules : Array ModuleExtraction.ModuleSpec) :
-    IO (Except JsonSupport.Error (Array Json)) := do
-  match ← runProfiled payload modules with
-  | .error err => pure <| .error err
-  | .ok output => pure <| .ok output.rows
+      | .ok sources => pure <| (selectDeclarations ids? sources).map featureRows
 
 end LeanSemanticSearch.DeclarationFeatures

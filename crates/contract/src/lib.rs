@@ -80,8 +80,6 @@ pub struct ModuleSpec {
     pub module: String,
     /// Optional caller-defined origin label.
     pub origin: Option<String>,
-    /// Optional source root for later source-aware feature extraction.
-    pub source_root: Option<String>,
 }
 
 /// 1-based source position used to identify a proof state.
@@ -240,7 +238,6 @@ mod tests {
             modules: vec![ModuleSpec {
                 module: "Example.Basic".to_owned(),
                 origin: None,
-                source_root: None,
             }],
             declaration_ids: Vec::new(),
         }
