@@ -30,10 +30,9 @@ taplo fmt --check
 cargo deny check
 ```
 
-Toolchain is pinned: Rust stable with `rust-version = "1.94"`, edition 2024; a Lean 4 toolchain visible to `lake`.
-`.cargo/config.toml` sets `LEAN_RS_NUM_THREADS=1` and `RUST_LOG=warn` for every cargo invocation—that is the single
-source of truth for test env vars (do not duplicate them in nextest config). Lean import paths can take seconds on a
-cold process; the nextest `slow-timeout` warns rather than killing until ~4 minutes.
+Toolchain is pinned: Rust stable with `rust-version = "1.94"`, edition 2024; a Lean 4 toolchain visible to `lake`. The
+ignored runtime build test runs `lake build` and can take seconds; the nextest `slow-timeout` warns rather than killing
+until ~4 minutes.
 
 If `lake`, `mdwright`, `taplo`, or `cargo-deny` is unavailable, record the exact command failure rather than working
 around it.
