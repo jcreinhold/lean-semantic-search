@@ -21,6 +21,11 @@ must have a corresponding `## [X.Y.Z]` section here.
 - The opt-in runtime build test needs only `LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT`. It checks that `open` reports a
   needed build first, then builds cold and warm and opens.
 
+### Removed
+
+- Breaking: the `lean-semantic-search-store` crate and its SQLite design note. Its only user, lean-dup, now keeps the
+  store as a private module of its index crate. The `Corpus` trait stays in `retrieval`.
+
 ## [0.8.0]
 
 ### Changed

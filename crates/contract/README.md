@@ -18,7 +18,7 @@ shaping all belong outside this crate.
 
 ```toml
 [dependencies]
-lean-semantic-search-contract = "0.8"
+lean-semantic-search-contract = "0.9"
 ```
 
 ```rust

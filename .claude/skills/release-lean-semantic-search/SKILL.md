@@ -47,15 +47,16 @@ on any failure. This runs the same gates as CI — `lake build`/`lake test`, the
 uploads or publish credentials. External SDK dependencies must already resolve from crates.io; no local override or
 `--no-verify` substitutes for that check. Use `--quick` only for iteration, never as the release gate.
 
-For runtime or SDK changes, also run the ignored runtime build test (see [`crates/runtime/README.md`](../../../crates/runtime/README.md#checks))
-against the SDK graph being released. It runs the real `lake build` through the SDK's shared writer, cold and warm. If
-the release adopts an SDK that is not yet on crates.io, test against it first with the local patch recipe in
-[`AGENTS.md`](../../../AGENTS.md#release-rule); the release gate itself must resolve published crates.
+For runtime or SDK changes, also run the ignored runtime build test (see
+[`crates/runtime/README.md`](../../../crates/runtime/README.md#checks)) against the SDK graph being released. It runs
+the real `lake build` cold and warm, then `open`. If the release adopts an SDK that is not yet on crates.io, test
+against it first with the local patch recipe in [`AGENTS.md`](../../../AGENTS.md#release-rule); the release gate itself
+must resolve published crates.
 
 ### 2. Version bump (the workspace version is the one source of truth)
 
-Pick the new `X.Y.Z`. Before 1.0, a breaking change or a new feature bumps the minor; anything else bumps the patch.
-The workspace version is the single source of truth; every place that restates it must move in lockstep:
+Pick the new `X.Y.Z`. Before 1.0, a breaking change or a new feature bumps the minor; anything else bumps the patch. The
+workspace version is the single source of truth; every place that restates it must move in lockstep:
 
 - root `Cargo.toml` `[workspace.package].version` — every member inherits it via `version.workspace = true`.
 - root `Cargo.toml` `[workspace.dependencies]` — each **internal path dep that also carries a `version`** must move to
@@ -69,10 +70,11 @@ The workspace version is the single source of truth; every place that restates i
 - `lean/lakefile.lean`: `version := v!"X.Y.Z"`, so the Lean package and the Rust workspace share one version. The
   lakefile is part of the runtime payload, so in the same commit copy it to `crates/runtime/runtime/lakefile.lean`,
   recompute the digest with the command in `lean/VENDORING.md`, and update `RUNTIME_SOURCE_DIGEST` in
-  `crates/runtime/src/lib.rs` and the recorded value in `lean/VENDORING.md` and its copy under `crates/runtime/runtime/`.
-  `scripts/check-runtime-vendoring.sh` and the `runtime_source_digest_matches_recorded_value` test fail until you do.
-- the dependency snippets in `crates/contract/README.md`, `crates/retrieval/README.md` and `crates/store/README.md`.
-  They name the minor line (`"X.Y"`), so they change only on a minor bump.
+  `crates/runtime/src/lib.rs` and the recorded value in `lean/VENDORING.md` and its copy under
+  `crates/runtime/runtime/`. `scripts/check-runtime-vendoring.sh` and the `runtime_source_digest_matches_recorded_value`
+  test fail until you do.
+- the dependency snippets in `crates/contract/README.md` and `crates/retrieval/README.md`. They name the minor line
+  (`"X.Y"`), so they change only on a minor bump.
 
 Run `cargo build` so `Cargo.lock` updates. The gate reads the workspace version from one member (`prerelease.sh` and
 `release.yml` anchor on `lean-semantic-search-contract`, but since all members share `[workspace.package].version` any

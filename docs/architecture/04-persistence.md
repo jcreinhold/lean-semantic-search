@@ -5,8 +5,8 @@ holds is right for a small workspace corpus and wrong for a mathlib-scale compar
 declaration row and posting list in memory is exactly the cost a persistent index exists to avoid.
 
 This note describes the seam a persistent store implements, with **no database in this layer**. `retrieval` holds one
-`Corpus` implementation, the in-memory inverted index; the SQLite store in `05-sqlite-store.md` implements the same
-seam. The ranking algorithm, anchor planning, and output shape never learn where rows live.
+`Corpus` implementation, the in-memory inverted index; lean-dup's SQLite store implements the same seam. The ranking
+algorithm, anchor planning, and output shape never learn where rows live.
 
 ## What the persistent layer owns, and what it must not
 
@@ -21,7 +21,7 @@ carries the vocabulary a consumer reasons in.
 | Provenance meaning, corpus identity, labels, freshness | Consumer |
 | Evidence modes, probe / verification, audit and review policy | Consumer |
 
-The store holds opaque equality tokens and the rows behind them, nothing a caller would render. A `Corpus` answers "who
+A store holds opaque equality tokens and the rows behind them, nothing a caller would render. A `Corpus` answers "who
 carries this key, and how many", and "give me this member's feature row"; it is never asked what a key means, where a
 corpus came from, or how a candidate should be displayed.
 
@@ -55,7 +55,7 @@ backend would otherwise issue one query per key.
 
 ### Where the trait lives—design it twice
 
-The trait lives in `retrieval`, and the store depends on `retrieval` to implement it. Four placements were weighed:
+The trait lives in `retrieval`, and a store depends on `retrieval` to implement it. Four placements were weighed:
 
 1. **Trait in `retrieval`, store implements it (chosen).** Retrieval is the high-level module; it owns the abstraction
    it needs, and the low-level store depends inward on that abstraction. The ranking loop is written once over
@@ -111,5 +111,5 @@ changes, the change moves `RETRIEVAL_POLICY_VERSION` from `lean-semantic-search.
 
 No SQLite, file, mmap, or storage dependency enters `retrieval`, and the seam fixes no on-disk layout. The `Corpus`
 trait carries no display, provenance, or audit field. The candidate output shape—`Candidate`, `MatchExplanation`,
-`FeatureFamily`—does not depend on the backend, and no score, weight, posting, or heap crosses the surface.
-`05-sqlite-store.md` describes the SQLite implementation.
+`FeatureFamily`—does not depend on the backend, and no score, weight, posting, or heap crosses the surface. lean-dup's
+index crate holds the SQLite implementation.

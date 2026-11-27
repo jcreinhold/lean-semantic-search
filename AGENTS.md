@@ -6,8 +6,8 @@ Lean semantic facts live, consumed by two downstream callers it does not contain
 process group.
 
 The repo is a dual Lean + Rust workspace. The **Lean package** extracts semantic features. The **Rust crates** define
-the JSON contract that crosses repository boundaries, rank candidates over feature rows, persist large corpora in
-SQLite, and ship the Lean package to hosts. Add nothing a caller does not need yet.
+the JSON contract that crosses repository boundaries, rank candidates over feature rows, and ship the Lean package to
+hosts. Add nothing a caller does not need yet.
 
 ## Commands
 
@@ -103,14 +103,10 @@ steps:
 - `retrieval`: storage-neutral semantic candidate generation over feature rows. Hides ranking weights, rarity weighting,
   fanout/posting limits, broad-head pruning, and the multi-lane bounded top-k. Callers see ranked candidates +
   feature-family explanations + diagnostics, never postings, heaps, composite scores, or raw keys. Ranks over a `Corpus`
-  trait with two implementations: the in-memory inverted index here and `store`'s SQLite index. `retrieve_across` fans
+  trait with two implementations: the in-memory inverted index here and lean-dup's SQLite index. `retrieve_across` fans
   one anchor across a slice of corpora. No storage dependency, no on-disk layout, no downstream ranking policy in this
   crate. Carries its own `RETRIEVAL_POLICY_VERSION` (`lean-semantic-search.retrieval.v2`); adds no DTOs to `contract`.
   See `docs/architecture/04-persistence.md`.
-- `store`: the SQLite `Corpus` for corpora too large to hold in memory, such as mathlib. Hides the schema, the
-  order-agnostic streaming build, publish by atomic rename, and a read path whose memory use tracks the query, not the
-  corpus. It records the caller's opaque `corpus_token` but never decides freshness or where corpora live. See
-  `docs/architecture/05-sqlite-store.md`.
 - `runtime`: ships the Lean package to hosts. Hides the payload under `crates/runtime/runtime/` (a copy of the runtime
   subset of `lean/`), its source digest, cache materialization, and the `lake build` it runs. `build` builds the
   package; `open` asks Lake, with `--no-build`, whether the modules are current. Hosts build before they serve, then
@@ -131,8 +127,7 @@ These constrain changes more than the compiler does:
 - Do not put downstream workflow policy in shared crates: no review-state fields, report presentation policy, experiment
   knobs, or production gates.
 - Do not put transport-specific or project-runtime types in shared search crates.
-- Do not expose raw Lean expressions, feature-key encodings, the store's SQLite schema, or cache layout in public APIs
-  or crate docs.
+- Do not expose raw Lean expressions, feature-key encodings, or cache layout in public APIs or crate docs.
 - Keep feature keys opaque. Fingerprint strings currently carry a `canonical.expr.v3` prefix, but callers may store and
   compare keys only under matching version fields.
 - Prefer concrete private modules over traits until two real implementations exist, as they do for `Corpus`.
@@ -146,8 +141,8 @@ These constrain changes more than the compiler does:
   way.
 - Proof-goal features are source-backed, computed from elaborated Lean expressions—never from pretty-printed goal text.
 - Keep ranking, fanout, and top-k policy private to `retrieval`; callers see only ranks, feature-family explanations,
-  and diagnostics. Retrieval takes no storage dependency: persistence enters only through the `Corpus` seam, and only
-  `store` knows SQLite. The `Corpus` seam carries no display, provenance, or audit field.
+  and diagnostics. Retrieval takes no storage dependency: persistence enters only through the `Corpus` seam, which a
+  caller implements. The `Corpus` seam carries no display, provenance, or audit field.
 
 ## Writing
 

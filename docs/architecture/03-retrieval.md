@@ -14,8 +14,8 @@ is a deep module.
 A `core` crate was the obvious alternative and the wrong one. `core` names importance, not a hidden decision; it becomes
 a bucket that accretes whatever has no better home, and its interface grows to match its contents. `retrieval` names
 what it hides, so its surface can stay small as its internals grow. Candidate sources sit behind a `Corpus` trait—not
-for generality, but because the SQLite store is a second real implementor and ranking must stay written once across
-both; see `04-persistence.md`.
+for generality, but because lean-dup's SQLite store is a second real implementor and ranking must stay written once
+across both; see `04-persistence.md`.
 
 ## What stays in `contract`
 
@@ -33,8 +33,7 @@ decision rather than a Lean fact.
 carry it, plus the document counts rarity weighting needs. It is the reference implementation of the `Corpus` trait;
 there is no database, cache, or on-disk layout here, so any caller can build an index from rows obtained however it
 likes: a duplicate-search index, a proof-agent corpus, a test fixture. Persistence enters only through the `Corpus` seam
-that the store implements, never as a storage dependency in this crate; see `04-persistence.md` and
-`05-sqlite-store.md`.
+that a caller's store implements, never as a storage dependency in this crate; see `04-persistence.md`.
 
 ## Source-backed proof-goal retrieval
 
