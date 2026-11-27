@@ -13,9 +13,9 @@ is a deep module.
 
 A `core` crate was the obvious alternative and the wrong one. `core` names importance, not a hidden decision; it becomes
 a bucket that accretes whatever has no better home, and its interface grows to match its contents. `retrieval` names
-what it hides, so its surface can stay small as its internals grow. Candidate sources are now abstracted behind a
-`Corpus` trait—not for generality, but because a second real implementor, a persistent store, is imminent and ranking
-must stay written once across both; see `04-persistence.md`.
+what it hides, so its surface can stay small as its internals grow. Candidate sources sit behind a `Corpus` trait—not
+for generality, but because the SQLite store is a second real implementor and ranking must stay written once across
+both; see `04-persistence.md`.
 
 ## What stays in `contract`
 
@@ -32,8 +32,9 @@ decision rather than a Lean fact.
 `SemanticIndex` is a view over rows the caller already holds—an inverted map from opaque key to the declarations that
 carry it, plus the document counts rarity weighting needs. It is the reference implementation of the `Corpus` trait;
 there is no database, cache, or on-disk layout here, so any caller can build an index from rows obtained however it
-likes: a duplicate-search index, a proof-agent corpus, a test fixture. Persistence enters only as the `Corpus` seam a
-later store fills, never as a storage dependency in this crate; see `04-persistence.md`.
+likes: a duplicate-search index, a proof-agent corpus, a test fixture. Persistence enters only through the `Corpus` seam
+that the store implements, never as a storage dependency in this crate; see `04-persistence.md` and
+`05-sqlite-store.md`.
 
 ## Source-backed proof-goal retrieval
 

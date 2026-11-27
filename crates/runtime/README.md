@@ -73,7 +73,7 @@ provenance still records the digest of the payload before the rename.
 From the repository root:
 
 ```sh
-cargo test -p lean-semantic-search-runtime
+cargo nextest run -p lean-semantic-search-runtime
 cargo package --list -p lean-semantic-search-runtime
 scripts/check-runtime-vendoring.sh
 ```

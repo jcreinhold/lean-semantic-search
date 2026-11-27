@@ -14,7 +14,8 @@
 #   declaration_features.vN, proof_goal_features.vN,
 #   lean-semantic-search.capability.vN) and the command names
 #   ("declaration_features", "proof_goal_features") are defined as constants
-#   in `crates/contract` and mirrored as defs in the Lean `Json` module.
+#   in `crates/contract` and mirrored as defs in the Lean `Json` module
+#   (canonical.expr.vN in `Canonical`).
 #   features.role_key.vN lives only in `Json.lean`: role keys are opaque to
 #   Rust. Changing one of those literals means the mirror side AND
 #   docs/architecture/01-capability-contract.md must move in the same change.
@@ -87,7 +88,7 @@ if tokens_changed "$contract_version_re" "$file"; then
 		cat <<EOF
 • You changed a contract version or command name in $file. These are
   mirrored across the Lean↔Rust boundary and have no cross-language test, so
-  move all three together:
+  move these together:
     - crates/contract/src/lib.rs constants: CAPABILITY_SCHEMA_VERSION,
       DECLARATION_FEATURES_COMMAND, DECLARATION_FEATURE_COMMAND_VERSION,
       PROOF_GOAL_FEATURES_COMMAND, PROOF_GOAL_FEATURE_COMMAND_VERSION,
@@ -96,6 +97,7 @@ if tokens_changed "$contract_version_re" "$file"; then
       declarationCommand, declarationFeatureCommandVersion, proofGoalCommand,
       proofGoalFeatureCommandVersion, semanticFeatureVersion, and
       roleKeyVersion (Lean only)
+    - lean/LeanSemanticSearch/Canonical.lean def: version
     - docs/architecture/01-capability-contract.md
 EOF
 	)")

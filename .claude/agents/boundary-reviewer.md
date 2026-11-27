@@ -32,9 +32,10 @@ memory):
 - `docs/architecture/01-capability-contract.md` — entry points, request shapes, response envelopes,
   versions
 - `docs/architecture/03-retrieval.md` — what the retrieval crate is allowed to expose
+- `docs/architecture/05-sqlite-store.md` — what the store owns, and its one-build-per-path rule
 - `AGENTS.md` — the invariants stated as prose
 - `crates/contract/src/lib.rs` — the version and command-name constants that must stay in lockstep
-  with `lean/LeanSemanticSearch/Json.lean`
+  with `lean/LeanSemanticSearch/Json.lean` and `Canonical.lean`
 
 You enforce the *intent* facts a compiler or unit test cannot see. Do not re-report a clippy lint or
 a self-contained crate test; flag what they cannot.
@@ -43,8 +44,8 @@ a self-contained crate test; flag what they cannot.
 
 **1. The boundary is the point (each layer's forbidden knowledge).**
 
-- A new Rust crate or module that does not hide a decision — empty placeholders for retrieval,
-  ranking, or storage that "don't exist yet." A crate exists only to hide something.
+- A new Rust crate or module that does not hide a decision, such as an empty placeholder. A crate
+  exists only to hide something.
 - Search/feature semantics leaking *downward* into `lean-rs`, or a Rust crate starting Lean itself.
   Only `runtime` runs Lean tooling: one `lake build` through the SDK's shared writer.
 - The Lean package's hidden knowledge (expression traversal, binder scheduling, role assignment,
@@ -56,16 +57,18 @@ exposes:
 - raw Lean expressions or pretty-printed type/goal text treated as anything but display;
 - feature-key internals / encodings — keys are **opaque equality tokens**, comparable only under a
   matching version field, never parsed or destructured;
-- worker rows/framing, storage layout, cache paths, or downstream workflow policy (review-state,
+- the store's SQLite schema, cache layout, or downstream workflow policy (review-state,
   report presentation, experiment knobs, production gates), transport-specific response types, or
   project-runtime types.
 
 **3. Versioned, in-lockstep contracts.**
 
 - Every public DTO crossing a repo boundary must carry a schema/algorithm version field.
-- Version strings stay centralized as constants in `contract` (+ `RETRIEVAL_POLICY_VERSION` in
-  `retrieval`) and mirrored as defs in the Lean `Json` module. If the diff changes a version on one
-  side without the mirror **and** `docs/architecture/01-capability-contract.md`, flag it.
+- Version strings stay centralized as constants in `contract` and mirrored as Lean defs in `Json`
+  (`Canonical.version` for the canonical version). If the diff changes a version on one side without
+  the mirror **and** `docs/architecture/01-capability-contract.md`, flag it. Two versions have no
+  mirror by design: `RETRIEVAL_POLICY_VERSION` lives only in `retrieval`, and the role-key version
+  only in Lean.
 - Hosts call `Capability.declarationFeatures` and `GoalElaboration.runWithSetup` by name from their
   own Lean driver. A rename or signature change is a breaking change: flag it unless the diff also
   updates the contract doc and the `CHANGELOG.md` `[Unreleased]` section.
@@ -79,9 +82,9 @@ exposes:
   pretty-printed goal text.
 - **Concrete private modules over traits** until two real implementations exist — flag a new trait
   introduced with a single implementor.
-- **Retrieval stays storage-neutral and in-memory:** no storage, persistence, or downstream ranking
-  policy; callers see `rank` + feature-family explanations + diagnostics, never postings, heaps,
-  composite scores, or raw keys.
+- **Retrieval stays storage-neutral:** no storage dependency (persistence enters only through
+  `Corpus`, which `store` implements) and no downstream ranking policy; callers see `rank` +
+  feature-family explanations + diagnostics, never postings, heaps, composite scores, or raw keys.
 
 ## Output
 

@@ -1,19 +1,17 @@
 # Persistence seam
 
-The `retrieval` crate ranks an anchor against a corpus. Until now the only corpus was an in-memory inverted index built
-from rows the caller already held, and `03-retrieval.md` declared persistence "a caller concern, deliberately left
-outside." That is right for a small workspace corpus and wrong for a mathlib-scale comparison corpus: materializing
-every declaration row and posting list in memory is exactly the cost a persistent index exists to avoid.
+The `retrieval` crate ranks an anchor against a corpus. An in-memory inverted index built from rows the caller already
+holds is right for a small workspace corpus and wrong for a mathlib-scale comparison corpus: materializing every
+declaration row and posting list in memory is exactly the cost a persistent index exists to avoid.
 
-This note introduces the seam a persistent store slots into, with **no database in this layer**. The only `Corpus`
-implementation here is the existing in-memory inverted index, now expressed behind the trait. The SQLite store arrives
-later and implements the same seam; the ranking algorithm, anchor planning, and output shape never learn where rows
-live.
+This note describes the seam a persistent store implements, with **no database in this layer**. `retrieval` holds one
+`Corpus` implementation, the in-memory inverted index; the SQLite store in `05-sqlite-store.md` implements the same
+seam. The ranking algorithm, anchor planning, and output shape never learn where rows live.
 
 ## What the persistent layer owns, and what it must not
 
-The persistent layer—this seam plus the later store—owns only the **semantic index** needed to generate candidates. It
-never carries the vocabulary a consumer reasons in.
+The persistent layer—this seam plus the store—owns only the **semantic index** needed to generate candidates. It never
+carries the vocabulary a consumer reasons in.
 
 | Concern | Owner |
 | --- | --- |
@@ -57,8 +55,7 @@ backend would otherwise issue one query per key.
 
 ### Where the trait lives—design it twice
 
-The trait lives in `retrieval`, and the later store depends on `retrieval` to implement it. Four placements were
-weighed:
+The trait lives in `retrieval`, and the store depends on `retrieval` to implement it. Four placements were weighed:
 
 1. **Trait in `retrieval`, store implements it (chosen).** Retrieval is the high-level module; it owns the abstraction
    it needs, and the low-level store depends inward on that abstraction. The ranking loop is written once over
@@ -110,9 +107,9 @@ changes, the change moves `RETRIEVAL_POLICY_VERSION` from `lean-semantic-search.
 `lean-semantic-search.retrieval.v2`. That constant versions a retrieval decision rather than a Lean fact, so it lives in
 `retrieval` and is not mirrored in the contract crate or the Lean package.
 
-## What this note does not add
+## What the seam does not add
 
-No SQLite, file, mmap, or storage dependency enters the shared crates here; no on-disk layout is fixed. The `Corpus`
+No SQLite, file, mmap, or storage dependency enters `retrieval`, and the seam fixes no on-disk layout. The `Corpus`
 trait carries no display, provenance, or audit field. The candidate output shape—`Candidate`, `MatchExplanation`,
-`FeatureFamily`—is unchanged, and no score, weight, posting, or heap crosses the surface. The SQLite implementation of
-this seam is the subject of the next note.
+`FeatureFamily`—does not depend on the backend, and no score, weight, posting, or heap crosses the surface.
+`05-sqlite-store.md` describes the SQLite implementation.

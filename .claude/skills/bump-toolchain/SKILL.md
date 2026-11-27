@@ -9,7 +9,7 @@ lean-semantic-search is the **upstream** shared package, not a downstream consum
 toolchain — it *chooses* one, and downstream hosts (`lean-dup`, `lean-host-mcp`) follow lean-semantic-search. So the
 target toolchain here is a relatively free choice: any real `leanprover/lean4` release the Lean package compiles under
 and the test suites pass on. The constraint is downstream-facing, not upstream-facing: pick a toolchain a published
-`lean-rs` release actually supports, so consumers can build the worker against it.
+`lean-rs` release actually supports, so downstream hosts can build against it.
 
 This is a different job from a downstream pin. Three things make it different, and getting them wrong is where the time
 goes:
@@ -18,10 +18,11 @@ goes:
   workflow read this single file (`--default-toolchain "$(cat lean/lean-toolchain)"`).
 - **The Lean package has no git `require`s.** `lean/lakefile.lean` depends on nothing upstream, so a toolchain bump
   never moves a Lake dependency tag. The only versioned coupling is on the Rust side: the `lean-rs` crate family.
-- **lean-rs is a *separate, co-timed* dependency, not a forced one.** This repo's Rust crates use `lean-rs-worker-protocol`
-  and the `lean-toolchain` crate (protocol/metadata, not the ABI host); no crate embeds `libleanshared` or has a
-  `build.rs`. So a Lean-toolchain bump does **not** force a lean-rs bump. They often move together (as v0.3.1 did), but
-  treat the lean-rs bump as an independent step you do only when adopting a new lean-rs release.
+- **lean-rs is a *separate, co-timed* dependency, not a forced one.** This repo's Rust crates use only the
+  `lean-toolchain` crate (toolchain facts, source-package materialization, the shared writer); no crate links
+  `libleanshared` or has a `build.rs`. So a Lean-toolchain bump does **not** force a lean-rs bump. They often move
+  together (as v0.3.1 did), but treat the lean-rs bump as an independent step you do only when adopting a new lean-rs
+  release.
 
 ## Before you start: identify the target
 
@@ -66,16 +67,16 @@ add one.
 
 Two coordinated places:
 
-- **Workspace deps** — in the root `Cargo.toml` `[workspace.dependencies]`, bump `lean-rs-worker-protocol` and
-  `lean-toolchain` to the new requirement (prefer major-only for a stable major, per the dependency policy).
-- **`deny.toml` floor** — the `[bans] deny` list version-floors the whole `lean-rs` family (`lean-rs`, `lean-rs-sys`,
-  `lean-rs-abi`, `lean-rs-host`, `lean-rs-interop-shims`, `lean-rs-worker-{protocol,parent,child}`, `lean-toolchain`).
-  Raise the floor to the new major and update the explanatory comment. The floor exists because lean-rs is `0.x`, so
+- **Workspace deps** — in the root `Cargo.toml` `[workspace.dependencies]`, bump `lean-toolchain` to the new
+  requirement (prefer major-only for a stable major, per the dependency policy).
+- **`deny.toml` floor** — the `[bans] deny` list version-floors `lean-toolchain` and the `lean-rs-abi` crate it pulls
+  in. Raise the floor to the new line and update the explanatory comment. The floor exists because lean-rs is `0.x`, so
   `0.N.x` and `0.(N+1).x` cannot coexist in one graph — a stale floor lets a pre-bump copy sneak back in as a deep
   `E0308` instead of a named cargo-deny diagnostic.
 
-Then refresh the lock: `cargo update -p lean-rs-worker-protocol -p lean-toolchain` (or rely on `cargo build` to resolve),
-and verify with `cargo deny check`.
+Then refresh the lock: `cargo update -p lean-toolchain` (or rely on `cargo build` to resolve), and verify with
+`cargo deny check`. To test against an SDK that is not yet published, use the local patch recipe in `AGENTS.md`
+("Release rule") and never commit its lockfile.
 
 ### 4. Update the Rust floor only if lean-rs raised it
 
@@ -87,13 +88,16 @@ version-agnostic).
 
 ### 5. Rebuild, test, and re-sync the vendored runtime
 
-Build the Lean package and run its driver first (the Rust runtime tests shell out to `lake`), then the Rust suite:
+Build the Lean package and run its driver, then the Rust suite:
 
 ```sh
 lake -d lean build                  # canonical Lean package under the new toolchain
 lake -d lean test                   # the `tests` exe (Main root)
-cargo test                          # workspace suite (nextest: 2 threads, no fail-fast)
+TMPDIR="$PWD/target/tmp" cargo nextest run --workspace
 ```
+
+The normal Rust tests do not run Lean. Also run the ignored runtime build test (`crates/runtime/README.md`, "Checks"):
+it is the one check that builds the materialized package the way hosts do, through the SDK's shared writer.
 
 If the new toolchain forced **any edit to the canonical Lean source** (`lean/LeanSemanticSearch/**`,
 `lean/lakefile.lean`, `lean/lake-manifest.json`, `lean/LeanSemanticSearch.lean`), the vendored copy and its digest move
@@ -106,7 +110,7 @@ in lockstep:
 - `crates/runtime/src/lib.rs`'s `runtime_source_digest_matches_recorded_value` test is the canary — a digest you forgot
   to update fails there.
 
-Prove the vendored payload matches the canonical source and still builds (this is what CI runs):
+Prove the vendored payload matches the canonical source and ships in the crate (CI runs this too):
 
 ```sh
 scripts/check-runtime-vendoring.sh
@@ -133,9 +137,9 @@ and don't mislead the next reader:
 - `crates/runtime/tests/build_cached.rs` — the `unwrap_or_else` default for `LEAN_SEMANTIC_SEARCH_RUNTIME_TOOLCHAIN`.
 - `crates/runtime/README.md` — the example `toolchain_label`.
 
-Grep the old version to catch any stragglers, and **leave historical records alone** — dated measurements
-(`lean/VENDORING.md` "Recorded …"), the `LeanSemanticSearchTest.lean` golden-capture comment, and past `CHANGELOG.md`
-entries record real past runs and must not be rewritten:
+Grep the old version to catch any stragglers, and **leave historical records alone** — the
+`LeanSemanticSearchTest.lean` golden-capture comment and past `CHANGELOG.md` entries record real past runs and must not
+be rewritten:
 
 ```sh
 grep -rIn 'v4\.OLD\.VERSION' --exclude-dir=.lake --exclude-dir=target --exclude=Cargo.lock --exclude=CHANGELOG.md .

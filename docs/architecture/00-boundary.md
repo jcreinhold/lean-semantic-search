@@ -28,10 +28,11 @@ presentation and workflow policy. Two alternatives were rejected:
 | --- | --- |
 | Lean package | Expression traversal, binder scheduling, proof-goal extraction, role-feature assignment, broad-head marking, semantic algorithm versions. |
 | Rust contract crate | Stable cross-repository JSON shapes, schema versions, opaque equality-key wrappers, diagnostic vocabulary. |
+| Rust retrieval crate | Ranking and rarity weights, fanout and posting limits, broad-head pruning, the multi-lane bounded top-k, and the `Corpus` seam. |
+| Rust store crate | SQLite schema, streaming build, atomic publish, and the read-only query path. |
 | Rust runtime crate | Runtime Lean file set, source digest, generated downstream toolchain rule, cache materialization, provenance sidecar, and explicit-sysroot Lake build. |
 
-A crate exists only to hide something. Retrieval—storage-neutral candidate generation, ranking weights, fanout and top-k
-limits, saturation diagnostics—becomes its own crate once that behavior exists, not before.
+A crate exists only to hide something; none starts as an empty placeholder.
 
 The runtime crate hides package distribution. Downstream hosts ask for a built `LeanSemanticSearch` package for a
 specific toolchain and sysroot; they do not copy `lean/`, reconstruct source digests, or decide which Lean files ship at
@@ -39,7 +40,7 @@ runtime.
 
 ## What Must Not Leak
 
-Public docs and APIs must not expose raw expressions, feature-key internals, worker rows, storage layout, downstream
+Public APIs and crate docs must not expose raw expressions, feature-key internals, the store's schema, downstream
 workflow policy, transport-specific response types, or project runtime internals.
 
 Opaque feature keys are allowed as equality tokens only. Their encoding is private to the Lean package and meaningful
@@ -52,4 +53,4 @@ The concrete downstream callers are:
 - `lean-dup` duplicate search, which owns its workflow and reports;
 - `lean-host-mcp` proof-agent search, which owns tool responses and fallback behavior.
 
-This package does not migrate either caller. It defines the boundary; retrieval and the downstream callers build on it.
+This package does not migrate either caller; each adopts a new release itself.

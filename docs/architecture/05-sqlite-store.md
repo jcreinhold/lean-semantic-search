@@ -111,9 +111,9 @@ and everyone else is unique, so the postings a query touches stay constant as th
 query heap stays under a fixed bound and does not scale with corpus size: it stays identical to the byte across the
 doubled corpus while query latency stays flat and only build time scales. `tests/benchmark.rs` asserts a peak query heap
 under 4 MB and a 200k/100k heap ratio under 1.5; one measured run peaked at 21,532 bytes for both sizes. Run it with
-`cargo test -p lean-semantic-search-store --test benchmark --release -- --ignored --nocapture`. The in-memory `Corpus`
-loads everything, which is right for a small or workspace corpus; the SQLite `Corpus` is for a large or external one
-such as mathlib.
+`cargo nextest run -p lean-semantic-search-store --release --run-ignored ignored-only --test benchmark --no-capture`.
+The in-memory `Corpus` loads everything, which is right for a small or workspace corpus; the SQLite `Corpus` is for a
+large or external one such as mathlib.
 
 ## The corpus token
 

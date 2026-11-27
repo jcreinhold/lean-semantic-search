@@ -8,10 +8,10 @@ matches from being crowded out behind fingerprint cohorts. It consumes the opaqu
 rows from `lean-semantic-search-contract` and returns ranked candidates explained in stable feature-family terms, with
 structured diagnostics for pruning and per-lane saturation.
 
-It ranks over a `Corpus` trait—the seam a persistent store later fills—with the in-memory inverted `SemanticIndex` as
-the reference implementation: a view over rows the caller already holds, not a database. `retrieve_across` fans one
-anchor across a slice of corpora and merges the result into one bounded, ranked list. A proof-goal anchor starts from a
-source-backed feature row, never from rendered goal text.
+It ranks over a `Corpus` trait, which `lean-semantic-search-store` also implements, with the in-memory inverted
+`SemanticIndex` as the reference implementation: a view over rows the caller already holds, not a database.
+`retrieve_across` fans one anchor across a slice of corpora and merges the result into one bounded, ranked list. A
+proof-goal anchor starts from a source-backed feature row, never from rendered goal text.
 
 This crate deliberately does not store or persist an index, take a storage dependency, rank for any particular
 downstream workflow, expose raw feature keys or composite scores, or carry corpus identity, provenance, or audit policy.
@@ -22,7 +22,7 @@ calibration carries its own `RETRIEVAL_POLICY_VERSION`.
 
 ```toml
 [dependencies]
-lean-semantic-search-retrieval = "0.3"
+lean-semantic-search-retrieval = "0.7"
 ```
 
 ```rust
@@ -35,6 +35,7 @@ use lean_semantic_search_retrieval::{Anchor, SemanticIndex, retrieve_across};
 - [Boundary note](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/00-boundary.md)
 - [Retrieval boundary](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/03-retrieval.md)
 - [Persistence seam](https://github.com/jcreinhold/lean-semantic-search/blob/main/docs/architecture/04-persistence.md)
+- [SQLite store crate](https://github.com/jcreinhold/lean-semantic-search/blob/main/crates/store/README.md)
 - [DTO contract crate](https://github.com/jcreinhold/lean-semantic-search/blob/main/crates/contract/README.md)
 
 ## License
