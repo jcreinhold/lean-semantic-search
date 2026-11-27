@@ -49,6 +49,13 @@ must have a corresponding `## [X.Y.Z]` section here.
   commit that later payload changes never updated. The runtime passes `RUNTIME_SOURCE_DIGEST` as the SDK's source
   identity, and the provenance sidecar moves to schema version 2.
 
+### Fixed
+
+- Concurrent `StoreBuilder`s for one destination no longer break each other. Each build writes its own randomly named
+  temp file, `<name>.<random>.building`, beside the destination in place of the shared `<path>.building`, and the last
+  to publish wins. A build killed before it publishes leaves its temp file behind, and the next build no longer clears
+  it. The store crate now depends on `tempfile` outside tests.
+
 ## [0.7.9]
 
 ### Added

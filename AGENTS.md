@@ -109,8 +109,8 @@ steps:
   See `docs/architecture/04-persistence.md`.
 - `store`: the SQLite `Corpus` for corpora too large to hold in memory, such as mathlib. Hides the schema, the
   order-agnostic streaming build, publish by atomic rename, and a read path whose memory use tracks the query, not the
-  corpus. It records the caller's opaque `corpus_token` but never decides freshness or where corpora live. Run one build
-  per destination path at a time. See `docs/architecture/05-sqlite-store.md`.
+  corpus. It records the caller's opaque `corpus_token` but never decides freshness or where corpora live. See
+  `docs/architecture/05-sqlite-store.md`.
 - `runtime`: ships the Lean package to hosts. Hides the payload under `crates/runtime/runtime/` (a copy of the runtime
   subset of `lean/`), its source digest, cache materialization, and the `lake build` it runs under the SDK's shared
   writer. Hosts get the package root, the built module directory, and provenance. A change to a payload file under

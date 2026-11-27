@@ -126,6 +126,8 @@ cannot read with `StoreError::SchemaMismatch`.
 ## Concurrency
 
 Each `Store` opens its own read-only connection, and nothing writes a published file again, so many readers can share
-one. A build writes `<path>.building` and renames it into place, so no reader opens a half-written index. Two builders
-for the same path share that temp file and break each other: run one build per destination at a time, or give each
-concurrent build its own path.
+one. Each build writes its own randomly named temp file, `<name>.<random>.building`, in the destination's directory and
+renames it into place, so no reader opens a half-written index. Concurrent builds of one path never share a temp file:
+each publishes a whole corpus, and the last rename wins. A build killed before it publishes or drops leaves its temp
+file behind. No later build removes it, because a build cannot tell a dead build's file from a live one's; a caller that
+owns the directory may delete leftover `*.building` files while no build runs.

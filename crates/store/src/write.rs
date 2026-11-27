@@ -14,6 +14,12 @@
 //! builder dropped before publishing removes its temp file, so an interrupted
 //! build leaves any prior corpus at the destination untouched and the new path
 //! absent.
+//!
+//! Each build gets its own randomly named temp file in the destination's
+//! directory, so concurrent builds of one destination never share a file: each
+//! publishes a whole corpus, and the last rename wins. A build killed before it
+//! publishes or drops leaves its temp file behind. No later build removes it,
+//! because it cannot tell a dead build's file from a live one's.
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
@@ -22,6 +28,7 @@ use std::path::{Path, PathBuf};
 use lean_semantic_search_contract::DeclarationFeatureRow;
 use lean_semantic_search_retrieval::RETRIEVAL_POLICY_VERSION;
 use rusqlite::{Connection, params};
+use tempfile::TempPath;
 
 use crate::StoreError;
 use crate::schema::{
@@ -45,7 +52,7 @@ pub enum Ingest {
 /// Builds a persisted corpus, then publishes it atomically.
 pub struct StoreBuilder {
     connection: Option<Connection>,
-    temp_path: PathBuf,
+    temp_path: Option<TempPath>,
     final_path: PathBuf,
     corpus_token: String,
     announced: HashSet<String>,
@@ -54,36 +61,36 @@ pub struct StoreBuilder {
 }
 
 impl StoreBuilder {
-    /// Open a fresh build at a temp path beside `path`, ready to ingest.
+    /// Open a fresh build in a temp file of its own beside `path`, ready to
+    /// ingest. Concurrent builds of one `path` each get their own temp file.
     ///
     /// `corpus_token` is an opaque, caller-supplied content identity stored
     /// verbatim; the store never interprets it.
     ///
     /// # Errors
     ///
-    /// Returns [`StoreError::Io`] if a stale temp file cannot be cleared, or
-    /// [`StoreError::Sqlite`] if the connection, pragmas, schema, or opening
-    /// transaction fail.
+    /// Returns [`StoreError::Io`] if the destination directory or the temp file
+    /// cannot be created, or [`StoreError::Sqlite`] if the connection, pragmas,
+    /// schema, or opening transaction fail.
     pub fn create(path: impl AsRef<Path>, corpus_token: impl Into<String>) -> Result<Self, StoreError> {
         let final_path = path.as_ref().to_path_buf();
         // Callers often build into a new directory, so create a missing parent.
-        // A bare filename has an empty parent and needs no directory.
-        if let Some(parent) = final_path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            std::fs::create_dir_all(parent)?;
-        }
-        let temp_path = building_path(&final_path);
-        if temp_path.exists() {
-            std::fs::remove_file(&temp_path)?;
-        }
+        // A bare filename has an empty parent and builds in the current directory.
+        let directory = match final_path.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => {
+                std::fs::create_dir_all(parent)?;
+                parent
+            }
+            _ => Path::new("."),
+        };
+        let temp_path = building_file(directory, &final_path)?;
         let connection = Connection::open(&temp_path)?;
         schema::initialize(&connection)?;
         // One transaction for the whole build; commit happens at publish.
         connection.execute_batch("BEGIN")?;
         Ok(Self {
             connection: Some(connection),
-            temp_path,
+            temp_path: Some(temp_path),
             final_path,
             corpus_token: corpus_token.into(),
             announced: HashSet::new(),
@@ -136,7 +143,10 @@ impl StoreBuilder {
         write_metadata(&connection, META_TOTAL_DOCUMENTS, &self.total_documents.to_string())?;
         connection.execute_batch("COMMIT")?;
         connection.close().map_err(|(_, error)| StoreError::Sqlite(error))?;
-        std::fs::rename(&self.temp_path, &self.final_path)?;
+        // Take the temp file only now: on an earlier error, drop closes the
+        // connection before it deletes the file.
+        let temp_path = self.temp_path.take().ok_or(StoreError::Closed)?;
+        temp_path.persist(&self.final_path).map_err(std::io::Error::from)?;
         Ok(self.final_path.clone())
     }
 
@@ -165,8 +175,9 @@ impl Drop for StoreBuilder {
         if let Some(connection) = self.connection.take() {
             connection.close().ok();
         }
-        // Remove the temp build unless it was already renamed away by publish.
-        std::fs::remove_file(&self.temp_path).ok();
+        // Dropping the temp path deletes an unpublished build. Publish takes it
+        // first, so a renamed build is never touched.
+        drop(self.temp_path.take());
     }
 }
 
@@ -192,9 +203,19 @@ fn write_metadata(connection: &Connection, key: &str, value: &str) -> Result<(),
     Ok(())
 }
 
-/// The sibling temp path a build writes to before it is renamed into place.
-fn building_path(final_path: &Path) -> PathBuf {
-    let mut name = final_path.file_name().map_or_else(OsString::new, OsString::from);
-    name.push(".building");
-    final_path.with_file_name(name)
+/// Create this build's own temp file, `<name>.<random>.building`, in the
+/// destination's directory, so publish can rename it in one step on the same
+/// filesystem.
+fn building_file(directory: &Path, final_path: &Path) -> Result<TempPath, StoreError> {
+    let mut prefix = final_path.file_name().map_or_else(OsString::new, OsString::from);
+    prefix.push(".");
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(&prefix).suffix(".building");
+    // `tempfile` makes owner-only files. Ask for the mode `SQLite` gives a new
+    // database (0644, less the umask), so a published store reads as before.
+    #[cfg(unix)]
+    {
+        builder.permissions(std::os::unix::fs::PermissionsExt::from_mode(0o644));
+    }
+    Ok(builder.tempfile_in(directory)?.into_temp_path())
 }

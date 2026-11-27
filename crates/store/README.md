@@ -12,9 +12,9 @@ them with bounded memory, and publishes the result atomically by renaming a temp
 It carries no declaration display text, module or kind fields, provenance, labels, probe caches, or any duplicate-audit
 or proof-agent vocabulary—those stay with consumers. The store records the caller's opaque `corpus_token` with its own
 `schema_version` and `policy_version` and exposes all three; it never interprets the token. The caller decides when a
-stored corpus is stale, where corpora live, and when to delete them. Run one build per destination path at a time:
-builders for the same path share one temp file. No other shared crate depends on this one, and `retrieval` takes no
-dependency on it.
+stored corpus is stale, where corpora live, and when to delete them. Concurrent builds of one path each write their own
+temp file, and the last to publish wins. No other shared crate depends on this one, and `retrieval` takes no dependency
+on it.
 
 ## Use it
 

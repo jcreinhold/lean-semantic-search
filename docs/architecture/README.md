@@ -11,6 +11,6 @@ Start here when deciding where a new semantic-search concern belongs.
 - [Persistence](04-persistence.md): the `Corpus` seam, multi-corpus fan-out, and the multi-lane recall guarantee—no
   database in this layer.
 - [SQLite store](05-sqlite-store.md): the persisted, on-disk `Corpus`—unified postings, streaming order-agnostic build,
-  atomic publish, a query-bounded resident set, and the one-build-per-path rule.
+  atomic publish, and a query-bounded resident set.
 
 Downstream ranking policy should land only when there is enough behavior to hide behind a clear owner.

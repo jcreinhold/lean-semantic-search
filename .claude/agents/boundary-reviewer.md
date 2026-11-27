@@ -32,7 +32,7 @@ memory):
 - `docs/architecture/01-capability-contract.md` — entry points, request shapes, response envelopes,
   versions
 - `docs/architecture/03-retrieval.md` — what the retrieval crate is allowed to expose
-- `docs/architecture/05-sqlite-store.md` — what the store owns, and its one-build-per-path rule
+- `docs/architecture/05-sqlite-store.md` — what the store owns
 - `AGENTS.md` — the invariants stated as prose
 - `crates/contract/src/lib.rs` — the version and command-name constants that must stay in lockstep
   with `lean/LeanSemanticSearch/Json.lean` and `Canonical.lean`

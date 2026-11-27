@@ -108,13 +108,17 @@ pub(crate) fn temp_path(tag: &str) -> Result<TempStorePath, String> {
     Ok(TempStorePath { _dir: dir, path })
 }
 
-/// Build and publish a corpus from rows (declaration announced, then featured),
-/// then open it read-only.
+/// Start a build and ingest rows (declaration announced, then featured),
+/// leaving it unpublished.
 ///
 /// # Errors
 ///
-/// Returns the stringified store error if building, publishing, or opening fails.
-pub(crate) fn build_store(path: &Path, corpus_token: &str, rows: &[DeclarationFeatureRow]) -> Result<Store, String> {
+/// Returns the stringified store error if creating the build or ingesting fails.
+pub(crate) fn start_build(
+    path: &Path,
+    corpus_token: &str,
+    rows: &[DeclarationFeatureRow],
+) -> Result<StoreBuilder, String> {
     let mut builder = StoreBuilder::create(path, corpus_token).map_err(|error| error.to_string())?;
     for row in rows {
         builder
@@ -124,6 +128,35 @@ pub(crate) fn build_store(path: &Path, corpus_token: &str, rows: &[DeclarationFe
             .accept(Ingest::Feature(row.clone()))
             .map_err(|error| error.to_string())?;
     }
-    let published = builder.publish().map_err(|error| error.to_string())?;
+    Ok(builder)
+}
+
+/// Build and publish a corpus from rows, then open it read-only.
+///
+/// # Errors
+///
+/// Returns the stringified store error if building, publishing, or opening fails.
+pub(crate) fn build_store(path: &Path, corpus_token: &str, rows: &[DeclarationFeatureRow]) -> Result<Store, String> {
+    let published = start_build(path, corpus_token, rows)?
+        .publish()
+        .map_err(|error| error.to_string())?;
     Store::open(published).map_err(|error| error.to_string())
+}
+
+/// Every entry in the directory holding `path` other than `path` itself, such
+/// as a temp file a build left behind.
+///
+/// # Errors
+///
+/// Returns the stringified I/O error if the directory cannot be read.
+pub(crate) fn stray_files(path: &Path) -> Result<Vec<PathBuf>, String> {
+    let directory = path.parent().ok_or("store path has no parent directory")?;
+    let mut stray = Vec::new();
+    for entry in std::fs::read_dir(directory).map_err(|error| error.to_string())? {
+        let entry_path = entry.map_err(|error| error.to_string())?.path();
+        if entry_path != path {
+            stray.push(entry_path);
+        }
+    }
+    Ok(stray)
 }
