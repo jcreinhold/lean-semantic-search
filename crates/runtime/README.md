@@ -74,8 +74,8 @@ scripts/check-runtime-vendoring.sh
 ```
 
 The ignored `build_cached_against_explicit_sysroot` integration test uses an absolute
-`LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT` and absolute SDK-compatible `LEAN_HOST_MCP_WRITER_EXECUTABLE`. It makes cold and
-warm calls against one temporary cache and compares provenance. Run it only with an allocated native build lane and a
+`LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT` and absolute SDK-compatible `LEAN_RS_WRITER_EXECUTABLE`. It makes cold and warm
+calls against one temporary cache and compares provenance. Run it only with an allocated native build lane and a
 matching reviewed helper; the normal Rust tests do not compile or load Lean. A failed or incomplete native build retains
 its cache and typed SDK error. Confirm writer retirement before removing that cache. This build check alone does not
 validate capability loading or search.

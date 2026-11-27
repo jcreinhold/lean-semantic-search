@@ -147,10 +147,10 @@ fn build_cached_against_explicit_sysroot() -> Result<(), Box<dyn std::error::Err
     let sysroot = std::env::var_os("LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT")
         .map(PathBuf::from)
         .ok_or("LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT is not set")?;
-    let writer = std::env::var_os("LEAN_HOST_MCP_WRITER_EXECUTABLE")
+    let writer = std::env::var_os("LEAN_RS_WRITER_EXECUTABLE")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
-        .ok_or("LEAN_HOST_MCP_WRITER_EXECUTABLE must select an absolute SDK-compatible helper")?;
+        .ok_or("LEAN_RS_WRITER_EXECUTABLE must select an absolute SDK-compatible helper")?;
     if !sysroot.is_absolute() {
         return Err("LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT must be absolute".into());
     }

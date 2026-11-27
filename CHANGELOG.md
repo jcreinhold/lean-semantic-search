@@ -10,12 +10,17 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Changed
+
+- The opt-in runtime build test reads the writer helper from `LEAN_RS_WRITER_EXECUTABLE`, the SDK's current name, in
+  place of `LEAN_HOST_MCP_WRITER_EXECUTABLE`, which lean-rs 0.11 removes. The lockfile now resolves lean-rs 0.10.17.
+
 ## [0.7.9]
 
 ### Added
 
-- A Lean-only setup-aware goal feature entry point for supervised processes, preserving Lake-selected options,
-  imports, artifacts and plugins. The existing capability/FFI contract is unchanged. Runtime source digest updated.
+- A Lean-only setup-aware goal feature entry point for supervised processes, preserving Lake-selected options, imports,
+  artifacts and plugins. The existing capability/FFI contract is unchanged. Runtime source digest updated.
 
 ## [0.7.8]
 
@@ -164,7 +169,6 @@ must have a corresponding `## [X.Y.Z]` section here.
   repairs the host shim's declaration-candidate scan; neither changes the contract or runtime behavior this package
   consumes, but the lean-rs types re-exported in this package's public API must stay on one lean-rs line downstream
   (`lean-host-mcp`). The minor bump carries that coupling.
-
 
 ## [0.4.3]
 
