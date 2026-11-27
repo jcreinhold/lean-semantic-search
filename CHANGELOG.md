@@ -45,6 +45,9 @@ must have a corresponding `## [X.Y.Z]` section here.
   `set_latest`, `latest_name`, `latest_index_path`, `index_path`, `corpus_dir`, `cleanup`, `CleanupMode`,
   `CleanupReport` and `CleanupEntry`. No consumer called them. Callers compare `Store::corpus_token`, `schema_version`
   and `policy_version` themselves and own their cache directories.
+- Breaking: runtime `SOURCE_REVISION` and `SemanticSearchRuntimeProvenance::source_revision`. The constant named a
+  commit that later payload changes never updated. The runtime passes `RUNTIME_SOURCE_DIGEST` as the SDK's source
+  identity, and the provenance sidecar moves to schema version 2.
 
 ## [0.7.9]
 

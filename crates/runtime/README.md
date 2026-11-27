@@ -66,7 +66,7 @@ It excludes test modules, executable drivers, build outputs, and the upstream `l
 materialization always generates a fresh `lean-toolchain` from the caller's requested toolchain label.
 
 Materialization renames the Lake package from `lean-semantic-search` to the plain identifier `lean_semantic_search`. The
-source payload and provenance retain their recorded revision and digest.
+provenance still records the digest of the payload before the rename.
 
 ## Checks
 

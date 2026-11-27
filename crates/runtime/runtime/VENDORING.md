@@ -5,7 +5,6 @@ that crate instead of copying this source into their own repositories.
 
 ## Provenance
 
-- `source_revision`: `c6cfa0dc75934d3487f8e018ad154cb104e23642`
 - Lake package name: `lean-semantic-search`
 - Lean library: `LeanSemanticSearch`
 - Manifest fact: `lean/lake-manifest.json` has `"packages": []`.

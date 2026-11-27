@@ -25,7 +25,7 @@ use walkdir::WalkDir;
 
 const RUNTIME_SOURCE_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/runtime");
 const SIDECAR_FILE_NAME: &str = "semantic-search-runtime.json";
-const CACHE_SCHEMA_VERSION: u32 = 1;
+const CACHE_SCHEMA_VERSION: u32 = 2;
 const PACKAGE_NAME: &str = "lean-semantic-search";
 const MATERIALIZED_PACKAGE_NAME: &str = "lean_semantic_search";
 /// Limit on one `lake build` run, the same as the SDK's own Lake builds.
@@ -35,8 +35,6 @@ const LAKE_BUILD_TIMEOUT: Duration = Duration::from_secs(120);
 #[cfg(unix)]
 const LAKE_DETAIL_CHARS: usize = 2000;
 
-/// Runtime source revision packaged by this crate.
-pub const SOURCE_REVISION: &str = "c6cfa0dc75934d3487f8e018ad154cb104e23642";
 /// Digest of the runtime Lean payload, using the file-set rule in
 /// `lean/VENDORING.md`.
 pub const RUNTIME_SOURCE_DIGEST: &str = "87aa4d89b03e4ebb7e0f7ac6f04f7a43604c8c910f3e1bcc75c540cde462cdcf";
@@ -117,8 +115,6 @@ pub struct SemanticSearchSourcePackage {
 pub struct SemanticSearchRuntimeProvenance {
     /// Sidecar schema version.
     pub schema_version: u32,
-    /// Upstream source revision.
-    pub source_revision: String,
     /// Runtime source digest.
     pub runtime_source_digest: String,
     /// Lake package name.
@@ -140,7 +136,6 @@ impl SemanticSearchRuntimeProvenance {
     fn new(toolchain_label: &str) -> Self {
         Self {
             schema_version: CACHE_SCHEMA_VERSION,
-            source_revision: SOURCE_REVISION.to_owned(),
             runtime_source_digest: RUNTIME_SOURCE_DIGEST.to_owned(),
             package: PACKAGE_NAME.to_owned(),
             materialized_package: MATERIALIZED_PACKAGE_NAME.to_owned(),
@@ -318,7 +313,9 @@ fn source_package_request(
         materialized_package_name: MATERIALIZED_PACKAGE_NAME.to_owned(),
         library_name: LIBRARY_NAME.to_owned(),
         source_digest: RUNTIME_SOURCE_DIGEST.to_owned(),
-        source_revision: SOURCE_REVISION.to_owned(),
+        // The SDK asks for a source identity beside the digest. The digest is
+        // the only one this crate keeps, so it serves as both.
+        source_revision: RUNTIME_SOURCE_DIGEST.to_owned(),
         crate_name: env!("CARGO_PKG_NAME").to_owned(),
         crate_version: env!("CARGO_PKG_VERSION").to_owned(),
         toolchain_label: toolchain_label.to_owned(),
@@ -607,7 +604,6 @@ mod tests {
         let sidecar: SemanticSearchRuntimeProvenance =
             serde_json::from_str(&read_string(&package.project_root.join(SIDECAR_FILE_NAME))?)
                 .map_err(|error| error.to_string())?;
-        assert_eq!(sidecar.source_revision, super::SOURCE_REVISION);
         assert_eq!(sidecar.runtime_source_digest, RUNTIME_SOURCE_DIGEST);
         assert_eq!(sidecar.package, PACKAGE_NAME);
         assert_eq!(sidecar.materialized_package, MATERIALIZED_PACKAGE_NAME);
