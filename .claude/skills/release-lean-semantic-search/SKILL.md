@@ -48,12 +48,14 @@ uploads or publish credentials. External SDK dependencies must already resolve f
 `--no-verify` substitutes for that check. Use `--quick` only for iteration, never as the release gate.
 
 For runtime or SDK changes, also run the ignored runtime build test (see [`crates/runtime/README.md`](../../../crates/runtime/README.md#checks))
-against the SDK graph being released. It runs the real `lake build` through the SDK's shared writer, cold and warm.
+against the SDK graph being released. It runs the real `lake build` through the SDK's shared writer, cold and warm. If
+the release adopts an SDK that is not yet on crates.io, test against it first with the local patch recipe in
+[`AGENTS.md`](../../../AGENTS.md#release-rule); the release gate itself must resolve published crates.
 
 ### 2. Version bump (the workspace version is the one source of truth)
 
-Pick the new `X.Y.Z` (patch unless the change is breaking or adds a feature — pre-1.0, so both bump the minor). The
-workspace version is the single source of truth; every place that restates it must move in lockstep:
+Pick the new `X.Y.Z`. Before 1.0, a breaking change or a new feature bumps the minor; anything else bumps the patch.
+The workspace version is the single source of truth; every place that restates it must move in lockstep:
 
 - root `Cargo.toml` `[workspace.package].version` — every member inherits it via `version.workspace = true`.
 - root `Cargo.toml` `[workspace.dependencies]` — each **internal path dep that also carries a `version`** must move to
@@ -64,8 +66,13 @@ workspace version is the single source of truth; every place that restates it mu
   grep -nE 'path = "crates/[^"]+", version =' Cargo.toml
   ```
 
-- `lean/lakefile.lean`: `version := v!"X.Y.Z"`. CI does not check this, but the project keeps the Lean package and the
-  Rust workspace on one unified version — bump it in the same commit.
+- `lean/lakefile.lean`: `version := v!"X.Y.Z"`, so the Lean package and the Rust workspace share one version. The
+  lakefile is part of the runtime payload, so in the same commit copy it to `crates/runtime/runtime/lakefile.lean`,
+  recompute the digest with the command in `lean/VENDORING.md`, and update `RUNTIME_SOURCE_DIGEST` in
+  `crates/runtime/src/lib.rs` and the recorded value in `lean/VENDORING.md` and its copy under `crates/runtime/runtime/`.
+  `scripts/check-runtime-vendoring.sh` and the `runtime_source_digest_matches_recorded_value` test fail until you do.
+- the dependency snippets in `crates/contract/README.md`, `crates/retrieval/README.md` and `crates/store/README.md`.
+  They name the minor line (`"X.Y"`), so they change only on a minor bump.
 
 Run `cargo build` so `Cargo.lock` updates. The gate reads the workspace version from one member (`prerelease.sh` and
 `release.yml` anchor on `lean-semantic-search-contract`, but since all members share `[workspace.package].version` any
@@ -86,8 +93,8 @@ The Lean definitions and Rust constants must stay in lockstep (see `AGENTS.md`).
 confirm both sides moved together, in the commits being released:
 
 - Each version and command-name constant in `crates/contract/src/lib.rs` must equal its mirror in
-  `lean/LeanSemanticSearch/Json.lean`. Compare the two files directly. `RETRIEVAL_POLICY_VERSION` in
-  `crates/retrieval/src/policy.rs` has no Lean mirror.
+  `lean/LeanSemanticSearch/Json.lean`, or in `Canonical.lean` for `CANONICAL_FEATURE_VERSION`. Compare the files
+  directly. `RETRIEVAL_POLICY_VERSION` in `crates/retrieval/src/policy.rs` has no Lean mirror.
 - If `Capability.declarationFeatures` or `GoalElaboration.runWithSetup` changed name or signature, the `CHANGELOG.md`
   entry says so: hosts call them by name from their own Lean driver.
 
@@ -99,8 +106,8 @@ a cosmetic one. If they are out of sync, fix before tagging.
 Before tagging, re-verify on the commit that will be tagged:
 
 - `ci.yml` is green on that commit.
-- `[workspace.package].version`, every pinned `[workspace.dependencies]` version, and `lean/lakefile.lean` all equal the
-  intended `X.Y.Z`.
+- `[workspace.package].version`, every pinned `[workspace.dependencies]` version, `lean/lakefile.lean`, and its copy
+  `crates/runtime/runtime/lakefile.lean` all equal the intended `X.Y.Z`.
 - `CHANGELOG.md` has a `## [X.Y.Z]` heading.
 
 **Confirm with the human, then push the signed tag** (this is the irreversible step):

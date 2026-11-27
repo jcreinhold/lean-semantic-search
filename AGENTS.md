@@ -45,11 +45,34 @@ around it.
 
 ## Release rule
 
-Test changes spanning the SDK and this repo together locally before pushing or tagging. Use temporary Cargo
-`[patch.crates-io]` overrides. Check the resolved crates with `cargo metadata --format-version 1`, then run the affected
-real Lean operation and this repo's required `scripts/prerelease.sh` checks. Do not publish an SDK crate just to test it
-here. Do not commit local paths or an override lockfile. When the whole change passes locally, release the batch
-upstream first, resolve the published pins, and keep the required release checks.
+Before 1.0, a breaking change or a new feature bumps the minor version; anything else bumps the patch. Each user-visible
+change adds an entry under `## [Unreleased]` in `CHANGELOG.md`, marked `Breaking:` when callers must change. The
+`release-lean-semantic-search` skill cuts the release.
+
+Test a change that spans the SDK and this repo together before pushing or tagging:
+
+- Point each Cargo command at the local SDK with `--config` patches. From the repository root, with the SDK checked out
+  beside it:
+
+  ```sh
+  sdk=../lean-rs/crates
+  cargo nextest run --workspace \
+    --config "patch.crates-io.lean-toolchain.path=\"$sdk/lean-toolchain\"" \
+    --config "patch.crates-io.lean-rs-abi.path=\"$sdk/lean-rs-abi\""
+  ```
+
+  Cargo skips a patch whose version does not meet the requirement in `Cargo.toml`, so confirm the resolved crates with
+  `cargo metadata --format-version 1` and the same patches.
+
+- Patching rewrites `Cargo.lock`. Copy it aside first and copy it back afterwards; never commit a local path or a
+  lockfile that names one.
+
+- With the same patches, run the affected real Lean operation (for the runtime, the ignored build test in
+  `crates/runtime/README.md`) and the Cargo checks that `scripts/prerelease.sh` runs. The script itself takes no
+  patches, and its packaging step needs published crates.
+
+- Do not publish an SDK crate just to test it here. When the whole change passes, release the SDK first, then resolve
+  the published pins and run `scripts/prerelease.sh`.
 
 ## Architecture: the boundary is the point
 
