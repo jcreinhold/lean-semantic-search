@@ -2,20 +2,18 @@
 **/target/
 **/*.rs.bk
 
-# Cargo lock for libraries is conventionally committed at the workspace root;
-# leave Cargo.lock tracked for reproducible binaries and CI.
-
-# Lake / Lean build output (for fixtures/lean/ landing in prompt 03)
-build/
-.lake/
+# Lean build output
+**/.lake/
 *.olean
-*.bak
+**/lake-manifest.json
+!lean/lake-manifest.json
 
 # Editor / IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*.bak
 *~
 
 # OS
@@ -31,11 +29,6 @@ Thumbs.db
 flamegraph.svg
 perf.data*
 
-# cargo-fuzz artifacts (per-run, regenerated; not source of truth)
-crates/*/fuzz/corpus/
-crates/*/fuzz/artifacts/
-crates/*/fuzz/target/
-
 # Codex system artifacts
 .system/
 
@@ -45,11 +38,3 @@ crates/*/fuzz/target/
 # Pi harness state
 .pi/sessions/
 .pi/tasks/
-
-# Lean build outputs.
-**/.lake/
-**/lake-manifest.json
-!lean/lake-manifest.json
-
-# Local semantic-search scratch data.
-**/.lean-semantic-search/
