@@ -5,8 +5,8 @@ This repository is the standalone semantic-search layer shared by `lean-dup` and
 ## Design Note
 
 `lean-rs` is the generic Lean SDK. This package uses it to materialize its Lean source package and to run `lake build`
-under the shared writer. It must not learn proof search, duplicate search, fingerprints, role features, ranking weights,
-fanout policy, or candidate evidence.
+in its own process group. It must not learn proof search, duplicate search, fingerprints, role features, ranking
+weights, fanout policy, or candidate evidence.
 
 Search semantics live here because they change for different reasons than worker transport, downstream workflow, or
 proof-agent response shaping. A standalone package lets `lean-dup` and `lean-host-mcp` share semantic facts without

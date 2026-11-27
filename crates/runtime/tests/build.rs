@@ -2,13 +2,11 @@
 
 #![cfg(unix)]
 
+use lean_semantic_search_runtime::{Error, SemanticSearchRuntimeBuild, build, open};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
-use lean_semantic_search_runtime::{Error, SemanticSearchRuntimeBuild, build_cached_with_writer};
-
-// Until the complete operation succeeds, even unwinding must retain the cache:
-// an SDK failure may mean its writer still owns work below this directory.
+// Until the complete operation succeeds, even unwinding keeps the cache, so a
+// failed build can be inspected.
 struct BuildCache {
     path: PathBuf,
     directory: Option<tempfile::TempDir>,
@@ -104,54 +102,49 @@ fn successful_build_check_removes_cache() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-#[ignore = "requires an explicit Lean sysroot and SDK-compatible shared-writer helper"]
-fn build_cached_against_explicit_sysroot() -> Result<(), Box<dyn std::error::Error>> {
+#[ignore = "requires an explicit Lean sysroot"]
+fn build_and_open_against_explicit_sysroot() -> Result<(), Box<dyn std::error::Error>> {
     let sysroot = std::env::var_os("LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT")
         .map(PathBuf::from)
         .ok_or("LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT is not set")?;
-    let writer = std::env::var_os("LEAN_RS_WRITER_EXECUTABLE")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .ok_or("LEAN_RS_WRITER_EXECUTABLE must select an absolute SDK-compatible helper")?;
     if !sysroot.is_absolute() {
         return Err("LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT must be absolute".into());
     }
     let toolchain = std::env::var("LEAN_SEMANTIC_SEARCH_RUNTIME_TOOLCHAIN")
         .unwrap_or_else(|_| "leanprover/lean4:v4.36.0".to_owned());
     with_build_cache(tempfile::tempdir()?, |cache_root| {
+        let input = SemanticSearchRuntimeBuild {
+            cache_root: cache_root.to_path_buf(),
+            toolchain_label: toolchain.clone(),
+            lean_sysroot: sysroot,
+        };
+        let unbuilt = open(input.clone());
+        assert!(
+            matches!(&unbuilt, Err(error) if error.needs_build()),
+            "nothing is built yet: {unbuilt:?}"
+        );
+
         let cold_start = std::time::Instant::now();
-        let cold = build_cached_with_writer(
-            SemanticSearchRuntimeBuild {
-                cache_root: cache_root.to_path_buf(),
-                toolchain_label: toolchain.clone(),
-                lean_sysroot: sysroot.clone(),
-            },
-            &writer,
-            Duration::from_secs(120),
-            || false,
-        )?;
+        let cold = build(input.clone(), || false)?;
         let cold_elapsed = cold_start.elapsed();
 
         let warm_start = std::time::Instant::now();
-        let warm = build_cached_with_writer(
-            SemanticSearchRuntimeBuild {
-                cache_root: cache_root.to_path_buf(),
-                toolchain_label: toolchain.clone(),
-                lean_sysroot: sysroot,
-            },
-            &writer,
-            Duration::from_secs(120),
-            || false,
-        )?;
+        let warm = build(input.clone(), || false)?;
         let warm_elapsed = warm_start.elapsed();
 
+        let open_start = std::time::Instant::now();
+        let opened = open(input)?;
+        let open_elapsed = open_start.elapsed();
+
         assert_eq!(cold, warm);
+        assert_eq!(cold, opened);
         assert!(cold.module_dir().starts_with(cold.package_root()));
         assert!(cold.module_dir().join("LeanSemanticSearch.olean").is_file());
         println!(
-            "semantic_runtime_build toolchain={toolchain} cold_ms={} warm_ms={}",
+            "semantic_runtime_build toolchain={toolchain} cold_ms={} warm_ms={} open_ms={}",
             cold_elapsed.as_millis(),
-            warm_elapsed.as_millis()
+            warm_elapsed.as_millis(),
+            open_elapsed.as_millis()
         );
         Ok(())
     })?;

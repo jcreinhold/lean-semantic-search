@@ -10,6 +10,17 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+### Changed
+
+- Breaking: `build_cached_with_writer` is gone. `build(input, cancelled)` runs `lake build LeanSemanticSearch` in the
+  materialized package, in its own process group, with a two-minute limit; a timeout or cancellation stops the whole
+  group. `open(input)` runs `lake build --no-build LeanSemanticSearch`, so Lake decides whether the modules are current,
+  and `Error::needs_build` reports a missing or stale build. A host builds before it serves and then opens. Lake's
+  output goes to `lake-output.log` in the package root, and an error ends with its last 2,000 characters.
+- Breaking: `Error` no longer carries the SDK's `WriterFailure`; lean-rs 0.12 removes the shared writer.
+- The opt-in runtime build test needs only `LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT`. It checks that `open` reports a
+  needed build first, then builds cold and warm and opens.
+
 ## [0.8.0]
 
 ### Changed

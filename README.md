@@ -32,7 +32,7 @@ top-k policy, and [docs/architecture/05-sqlite-store.md](docs/architecture/05-sq
 
 | Repository | Owns |
 | --- | --- |
-| `lean-rs` | Lean toolchain facts, source-package materialization, and the shared writer that holds the project lock while Lake runs. |
+| `lean-rs` | Lean toolchain facts, source-package materialization, and process groups for the Lake runs. |
 | `lean-semantic-search` | Lean semantic feature extraction, opaque feature DTOs, ranking, the SQLite corpus store, and the packaged Lean runtime. |
 | `lean-dup` | Duplicate-search workflow and presentation policy. |
 | `lean-host-mcp` | Proof-agent response shaping and project runtime policy. |

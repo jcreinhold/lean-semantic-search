@@ -14,21 +14,19 @@ supervised Lean processes.
 ## Use It
 
 ```rust
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::path::PathBuf;
 
-use lean_semantic_search_runtime::{SemanticSearchRuntimeBuild, build_cached_with_writer};
+use lean_semantic_search_runtime::{SemanticSearchRuntimeBuild, build, open};
 
-let runtime = build_cached_with_writer(
-    SemanticSearchRuntimeBuild {
-        cache_root: PathBuf::from("/path/to/host-owned/semantic-runtime-cache"),
-        toolchain_label: "leanprover/lean4:v4.36.0".to_owned(),
-        lean_sysroot: PathBuf::from("/path/to/elan/toolchain"),
-    },
-    Path::new("/path/to/lean-rs-writer"),
-    Duration::from_secs(120),
-    || false,
-)?;
+let input = SemanticSearchRuntimeBuild {
+    cache_root: PathBuf::from("/path/to/host-owned/semantic-runtime-cache"),
+    toolchain_label: "leanprover/lean4:v4.36.0".to_owned(),
+    lean_sysroot: PathBuf::from("/path/to/elan/toolchain"),
+};
+// Once, before serving:
+build(input.clone(), || false)?;
+// While serving:
+let runtime = open(input)?;
 let lean_path = runtime.module_dir();
 # Ok::<(), lean_semantic_search_runtime::Error>(())
 ```
@@ -36,18 +34,15 @@ let lean_path = runtime.module_dir();
 The cache entry is keyed by the runtime source digest and sanitized toolchain label. Callers own the cache root; this
 crate owns everything below it.
 
-`build_cached_with_writer` runs on Unix. Pass an explicitly selected absolute path to an SDK shared-writer helper, an
-admission timeout, and a cancellation predicate. The helper takes custody of the cache entry and project locks before
-materialization and keeps it while Lake runs, so concurrent callers on one cache wait their turn. The helper must speak
-the matching SDK shared-writer protocol. The result grants no permission to load or query the modules.
-
-The admission timeout is not a deadline for the whole request; the Lake run has its own two-minute limit. Cancellation
-asks the SDK to stop owned work. A missing result is not permission to retry, and unknown cleanup must not be treated as
-confirmed retirement. `Error` is opaque: its message names the failed step, and its source chain keeps the SDK's
-`WriterFailure`, directly or inside an `std::io::Error` (read it with `WriterFailure::from_io`).
+`build` and `open` run on Unix. `build` runs `lake build LeanSemanticSearch` in its own process group with a two-minute
+limit; a timeout or the cancellation predicate stops the whole group. A file lock on the cache entry makes calls on one
+cache take turns. Nothing may load the modules while a build runs, so a host builds before it serves. `open` runs
+`lake build --no-build LeanSemanticSearch`, which builds nothing: Lake decides whether the modules are current, and
+`Error::needs_build` reports when they are not. Lake's output goes to `lake-output.log` in the package root, and an
+error message ends with its last 2,000 characters.
 
 `materialize_source_package` serves downstream Lake projects, such as `lean-dup`, that `require` `LeanSemanticSearch`
-and build it themselves. It starts no writer or compiler.
+and build it themselves. It starts no compiler.
 
 ## Runtime Payload
 
@@ -78,16 +73,15 @@ cargo package --list -p lean-semantic-search-runtime
 scripts/check-runtime-vendoring.sh
 ```
 
-The ignored `build_cached_against_explicit_sysroot` integration test needs an absolute
-`LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT` and an absolute SDK-compatible `LEAN_RS_WRITER_EXECUTABLE`. It builds cold and
-warm against one temporary cache and checks that both calls return the same built modules:
+The ignored `build_and_open_against_explicit_sysroot` integration test needs an absolute
+`LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT`. Against one temporary cache it checks that `open` reports a needed build, then
+builds cold and warm, opens, and checks that all three return the same modules:
 
 ```sh
 TMPDIR="$PWD/target/tmp" \
 LEAN_SEMANTIC_SEARCH_RUNTIME_SYSROOT="$(lean --print-prefix)" \
-LEAN_RS_WRITER_EXECUTABLE=/absolute/path/to/lean-rs-writer \
   cargo nextest run -p lean-semantic-search-runtime --run-ignored ignored-only
 ```
 
-The normal Rust tests do not compile or load Lean. A failed build keeps its cache and the SDK error; confirm the writer
-stopped before removing that cache.
+The normal Rust tests do not compile or load Lean; they run a fake `lake` script. A failed build keeps its cache for
+inspection.

@@ -2,8 +2,8 @@
 
 `lean-semantic-search` is the **shared semantic-search package** for Lean tooling. It is the boundary where reusable
 Lean semantic facts live, consumed by two downstream callers it does not contain: `lean-dup` (duplicate search) and
-`lean-host-mcp` (proof-agent search). It uses `lean-rs` only to materialize its Lean package and run `lake build` under
-the SDK's shared writer.
+`lean-host-mcp` (proof-agent search). It uses `lean-rs` only to materialize its Lean package and to run Lake in its own
+process group.
 
 The repo is a dual Lean + Rust workspace. The **Lean package** extracts semantic features. The **Rust crates** define
 the JSON contract that crosses repository boundaries, rank candidates over feature rows, persist large corpora in
@@ -112,9 +112,10 @@ steps:
   corpus. It records the caller's opaque `corpus_token` but never decides freshness or where corpora live. See
   `docs/architecture/05-sqlite-store.md`.
 - `runtime`: ships the Lean package to hosts. Hides the payload under `crates/runtime/runtime/` (a copy of the runtime
-  subset of `lean/`), its source digest, cache materialization, and the `lake build` it runs under the SDK's shared
-  writer. Hosts get the package root, the built module directory, and provenance. A change to a payload file under
-  `lean/` must be copied there and the digest recomputed; see `lean/VENDORING.md`.
+  subset of `lean/`), its source digest, cache materialization, and the `lake build` it runs. `build` builds the
+  package; `open` asks Lake, with `--no-build`, whether the modules are current. Hosts build before they serve, then
+  open, and get the package root, the built module directory, and provenance. A change to a payload file under `lean/`
+  must be copied there and the digest recomputed; see `lean/VENDORING.md`.
 
 **The Lean definitions and Rust constants must stay in lockstep.** The command names and versions in
 `crates/contract/src/lib.rs` match their Lean mirrors in `Json.lean` and `Canonical.version`, and the JSON shapes the

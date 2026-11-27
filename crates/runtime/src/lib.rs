@@ -3,19 +3,21 @@
 //! Downstream hosts depend on this crate instead of copying Lean source into
 //! their own repositories. The crate owns the runtime payload, its source
 //! digest, cache materialization, the provenance sidecar, and the Lake build
-//! of the package's modules under the SDK shared writer. Lake decides what is
-//! stale. Callers run Lean against the built modules; this crate starts no
-//! Lean process for them and chooses no imports.
+//! of the package's modules. Lake decides what is stale. Callers run Lean
+//! against the built modules; this crate starts no Lean process for them and
+//! chooses no imports.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 #[cfg(unix)]
-use std::process::{Command, ExitStatus, Output};
+use std::process::{Command, ExitStatus, Stdio};
 #[cfg(unix)]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(unix)]
-use lean_toolchain::with_materialized_source_package_with_writer;
+use lean_toolchain::process_group::OwnedCommandGroup;
+#[cfg(unix)]
+use lean_toolchain::with_materialized_source_package;
 use lean_toolchain::{
     GeneratedSourceFile, SourcePackageError, SourcePackageManifestPolicy, SourcePackageMaterializationRequest,
     materialize_source_package as materialize_with_toolchain,
@@ -28,10 +30,19 @@ const SIDECAR_FILE_NAME: &str = "semantic-search-runtime.json";
 const CACHE_SCHEMA_VERSION: u32 = 2;
 const PACKAGE_NAME: &str = "lean-semantic-search";
 const MATERIALIZED_PACKAGE_NAME: &str = "lean_semantic_search";
-/// Limit on one `lake build` run, the same as the SDK's own Lake builds.
+/// Limit on one Lake run, and on the wait for the cache entry's lock.
 #[cfg(unix)]
-const LAKE_BUILD_TIMEOUT: Duration = Duration::from_secs(120);
-/// Characters of Lake output kept in a build error.
+const LAKE_TIMEOUT: Duration = Duration::from_secs(120);
+/// Time a stopped Lake run has to exit before the call gives up on it.
+#[cfg(unix)]
+const STOP_GRACE: Duration = Duration::from_secs(10);
+/// Interval between checks on a running Lake process.
+#[cfg(unix)]
+const POLL_INTERVAL: Duration = Duration::from_millis(20);
+/// Lake's combined output, kept in the package root after each run.
+#[cfg(unix)]
+const LAKE_LOG_FILE_NAME: &str = "lake-output.log";
+/// Characters of Lake output kept in an error.
 #[cfg(unix)]
 const LAKE_DETAIL_CHARS: usize = 2000;
 
@@ -71,8 +82,9 @@ pub struct SemanticSearchSourcePackageRequest {
 
 /// Built `LeanSemanticSearch` modules plus package provenance.
 ///
-/// The paths come from a Lake build that finished under writer custody. Put
-/// [`module_dir`](Self::module_dir) on `LEAN_PATH` to import the modules.
+/// The paths come from a Lake build that finished, or from Lake's report that
+/// the modules are current. Put [`module_dir`](Self::module_dir) on
+/// `LEAN_PATH` to import the modules.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SemanticSearchRuntime {
     package_root: PathBuf,
@@ -147,15 +159,29 @@ impl SemanticSearchRuntimeProvenance {
     }
 }
 
-/// Failure to materialize or build the runtime package.
+/// Failure to materialize, build or open the runtime package.
 ///
-/// The message names the step that failed. When the SDK shared writer reports
-/// how far a command got, the source chain carries the SDK's
-/// [`WriterFailure`](lean_toolchain::shared_writer::WriterFailure), directly
-/// or inside an [`std::io::Error`] (read it with `WriterFailure::from_io`).
+/// The message names the step that failed and ends with the tail of Lake's
+/// output when Lake ran.
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub struct Error(#[from] ErrorKind);
+
+impl Error {
+    /// Whether [`open`] found the modules missing or stale, so that [`build`]
+    /// must run first.
+    #[must_use]
+    pub const fn needs_build(&self) -> bool {
+        #[cfg(unix)]
+        {
+            matches!(self.0, ErrorKind::NeedsBuild { .. })
+        }
+        #[cfg(not(unix))]
+        {
+            false
+        }
+    }
+}
 
 impl From<SourcePackageError> for Error {
     fn from(source: SourcePackageError) -> Self {
@@ -187,103 +213,199 @@ enum ErrorKind {
         source: SourcePackageError,
     },
     #[cfg(unix)]
-    #[error("semantic-search runtime writer failed in {}: {source}", package_root.display())]
-    Writer {
+    #[error("could not run `lake {command}` in {}: {source}", package_root.display())]
+    Spawn {
+        command: String,
         package_root: PathBuf,
         #[source]
         source: std::io::Error,
     },
     #[cfg(unix)]
-    #[error("`lake build {LIBRARY_NAME}` failed in {} with {status}: {detail}", package_root.display())]
+    #[error("`lake {command}` in {} {outcome}: {detail}", package_root.display())]
     Lake {
+        command: String,
         package_root: PathBuf,
-        status: ExitStatus,
+        outcome: LakeOutcome,
         detail: String,
     },
+    #[cfg(unix)]
+    #[error("`lake build --no-build {LIBRARY_NAME}` reports that {} needs a build", package_root.display())]
+    NeedsBuild { package_root: PathBuf },
 }
 
-/// Build the packaged runtime's Lean modules for one toolchain under a
-/// caller-selected SDK shared-writer helper.
+/// How a Lake run that did not succeed ended.
+#[cfg(unix)]
+#[derive(Debug)]
+enum LakeOutcome {
+    Failed(ExitStatus),
+    Cancelled,
+    TimedOut,
+    DidNotStop,
+}
+
+#[cfg(unix)]
+impl std::fmt::Display for LakeOutcome {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed(status) => write!(formatter, "failed with {status}"),
+            Self::Cancelled => formatter.write_str("was cancelled and stopped"),
+            Self::TimedOut => write!(
+                formatter,
+                "ran past its {} s limit and was stopped",
+                LAKE_TIMEOUT.as_secs()
+            ),
+            Self::DidNotStop => write!(
+                formatter,
+                "did not stop within {} s of a stop request and may still run",
+                STOP_GRACE.as_secs()
+            ),
+        }
+    }
+}
+
+/// Build the packaged runtime's Lean modules for one toolchain.
 ///
-/// The helper takes custody of the cache entry and project locks before
-/// materialization and keeps it while `lake build LeanSemanticSearch` runs.
-/// The caller must select an executable that speaks the SDK shared-writer
-/// protocol. The result grants no permission to load or query the modules.
-///
-/// `lock_timeout` bounds admission, not the whole request; the Lake run has
-/// its own two-minute limit. Cancellation stops further stages and asks the
-/// SDK to stop owned work. An unavailable result does not permit a retry, and
-/// unknown cleanup stays unknown: see [`Error`] for the SDK evidence it keeps.
+/// This materializes the package under the cache root and runs
+/// `lake build LeanSemanticSearch` there with the Lake of `lean_sysroot`. A
+/// file lock on the cache entry makes calls on one cache take turns. Nothing
+/// may load the modules while a build runs, so a host builds before it serves
+/// and then uses [`open`]. The Lake run has a two-minute limit, and
+/// `cancelled` stops it sooner.
 ///
 /// # Errors
 ///
-/// Returns [`Error`] on admission, cancellation, materialization or Lake
-/// failure.
+/// Returns [`Error`] on cancellation, materialization, timeout or Lake failure.
 #[cfg(unix)]
-pub fn build_cached_with_writer(
+pub fn build(input: SemanticSearchRuntimeBuild, cancelled: impl Fn() -> bool) -> Result<SemanticSearchRuntime, Error> {
+    run_in_package(input, &["build", LIBRARY_NAME], &cancelled)
+}
+
+/// Open the runtime that [`build`] made, without building it.
+///
+/// Lake decides whether the modules are current: this runs
+/// `lake build --no-build LeanSemanticSearch`, which builds nothing. If the
+/// cache entry is missing, this writes its source files first.
+///
+/// # Errors
+///
+/// Returns [`Error`] on materialization or Lake failure. When the modules are
+/// missing or stale, [`Error::needs_build`] is true.
+#[cfg(unix)]
+pub fn open(input: SemanticSearchRuntimeBuild) -> Result<SemanticSearchRuntime, Error> {
+    run_in_package(input, &["build", "--no-build", LIBRARY_NAME], &|| false)
+}
+
+#[cfg(unix)]
+fn run_in_package(
     input: SemanticSearchRuntimeBuild,
-    writer_executable: &Path,
-    lock_timeout: Duration,
-    cancelled: impl Fn() -> bool,
+    args: &[&str],
+    cancelled: &impl Fn() -> bool,
 ) -> Result<SemanticSearchRuntime, Error> {
     ensure_runtime_payload_source(Path::new(RUNTIME_SOURCE_ROOT))?;
     let provenance = SemanticSearchRuntimeProvenance::new(&input.toolchain_label);
     let request = source_package_request(input.cache_root, &input.toolchain_label, &provenance)?;
-    with_materialized_source_package_with_writer(
-        &request,
-        writer_executable,
-        lock_timeout,
-        &cancelled,
-        |materialized, writer| {
-            let package_root = canonicalize(&materialized.project_root, "resolve semantic-search runtime package")?;
-            let mut lake = Command::new(input.lean_sysroot.join("bin/lake"));
-            lake.env("LEAN_SYSROOT", &input.lean_sysroot)
-                .args(["build", LIBRARY_NAME])
-                .current_dir(&package_root);
-            let output = writer
-                .run_cancellable(&lake, LAKE_BUILD_TIMEOUT, &cancelled)
-                .map_err(|source| ErrorKind::Writer {
-                    package_root: package_root.clone(),
-                    source,
-                })?;
-            if !output.status.success() {
-                return Err(ErrorKind::Lake {
-                    package_root,
-                    status: output.status,
-                    detail: lake_detail(&output),
-                }
-                .into());
+    with_materialized_source_package(&request, LAKE_TIMEOUT, cancelled, |materialized| {
+        let package_root = canonicalize(&materialized.project_root, "resolve semantic-search runtime package")?;
+        let mut lake = Command::new(input.lean_sysroot.join("bin/lake"));
+        lake.env("LEAN_SYSROOT", &input.lean_sysroot)
+            .args(args)
+            .current_dir(&package_root);
+        let command = args.join(" ");
+        let status = run_lake(lake, &command, &package_root, cancelled)?;
+        if status.code() == Some(3) && args.contains(&"--no-build") {
+            return Err(ErrorKind::NeedsBuild { package_root }.into());
+        }
+        if !status.success() {
+            return Err(lake_error(&command, &package_root, LakeOutcome::Failed(status)).into());
+        }
+        let module_dir = canonicalize(
+            &package_root.join(".lake/build/lib/lean"),
+            "find built semantic-search modules",
+        )?;
+        Ok(SemanticSearchRuntime {
+            package_root,
+            module_dir,
+            provenance,
+        })
+    })
+}
+
+/// Run Lake in its own process group with output to the package's log, and
+/// return its exit status. A timeout or cancellation stops the whole group.
+#[cfg(unix)]
+fn run_lake(
+    mut lake: Command,
+    command: &str,
+    package_root: &Path,
+    cancelled: &impl Fn() -> bool,
+) -> Result<ExitStatus, ErrorKind> {
+    let spawn_error = |source| ErrorKind::Spawn {
+        command: command.to_owned(),
+        package_root: package_root.to_path_buf(),
+        source,
+    };
+    let log = fs::File::create(package_root.join(LAKE_LOG_FILE_NAME)).map_err(spawn_error)?;
+    lake.stdin(Stdio::null())
+        .stdout(log.try_clone().map_err(spawn_error)?)
+        .stderr(log);
+    let mut group = OwnedCommandGroup::spawn(lake).map_err(spawn_error)?;
+    let started = Instant::now();
+    // When a stop was asked for, and the outcome to report once the group
+    // closes. `None` means Lake itself exited and only leftovers were stopped.
+    let mut stopping: Option<(Instant, Option<LakeOutcome>)> = None;
+    loop {
+        if let Some(status) = group.try_wait().map_err(spawn_error)? {
+            return match stopping {
+                Some((_, Some(outcome))) => Err(lake_error(command, package_root, outcome)),
+                _ => Ok(status),
+            };
+        }
+        match &stopping {
+            Some((asked, _)) if asked.elapsed() >= STOP_GRACE => {
+                return Err(lake_error(command, package_root, LakeOutcome::DidNotStop));
             }
-            let module_dir = canonicalize(
-                &package_root.join(".lake/build/lib/lean"),
-                "find built semantic-search modules",
-            )?;
-            Ok(SemanticSearchRuntime {
-                package_root,
-                module_dir,
-                provenance,
-            })
-        },
-    )
+            Some(_) => {}
+            None => {
+                let reason = if cancelled() {
+                    Some(Some(LakeOutcome::Cancelled))
+                } else if started.elapsed() >= LAKE_TIMEOUT {
+                    Some(Some(LakeOutcome::TimedOut))
+                } else {
+                    group.cleanup_pending().then_some(None)
+                };
+                if let Some(reason) = reason {
+                    group.request_stop().map_err(spawn_error)?;
+                    stopping = Some((Instant::now(), reason));
+                }
+            }
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+}
+
+#[cfg(unix)]
+fn lake_error(command: &str, package_root: &Path, outcome: LakeOutcome) -> ErrorKind {
+    let log = fs::read(package_root.join(LAKE_LOG_FILE_NAME)).unwrap_or_default();
+    ErrorKind::Lake {
+        command: command.to_owned(),
+        package_root: package_root.to_path_buf(),
+        outcome,
+        detail: lake_detail(&String::from_utf8_lossy(&log)),
+    }
 }
 
 /// Lake's output on one line, cut to its last [`LAKE_DETAIL_CHARS`]
 /// characters, where Lake prints its error summary.
 #[cfg(unix)]
-fn lake_detail(output: &Output) -> String {
-    let text = format!(
-        "{} {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+fn lake_detail(output: &str) -> String {
+    let line = output.split_whitespace().collect::<Vec<_>>().join(" ");
     let skip = line.chars().count().saturating_sub(LAKE_DETAIL_CHARS);
     line.chars().skip(skip).collect()
 }
 
 /// Materialize the packaged runtime source package without building it.
 ///
-/// It starts no writer or compiler.
+/// It starts no compiler.
 ///
 /// # Errors
 ///
@@ -493,8 +615,6 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::thread;
 
-    use lean_toolchain::shared_writer::{WriterDisposition, WriterFailure};
-
     use sha2::{Digest, Sha256};
     use walkdir::WalkDir;
 
@@ -654,27 +774,41 @@ mod tests {
         Ok(())
     }
 
+    /// A Lean sysroot whose `bin/lake` is the given shell script.
+    #[cfg(unix)]
+    fn fake_sysroot(root: &Path, script: &str) -> Result<PathBuf, String> {
+        use std::os::unix::fs::PermissionsExt as _;
+        let bin = root.join("sysroot/bin");
+        fs::create_dir_all(&bin).map_err(|error| error.to_string())?;
+        let lake = bin.join("lake");
+        fs::write(&lake, format!("#!/bin/sh\n{script}\n")).map_err(|error| error.to_string())?;
+        fs::set_permissions(&lake, fs::Permissions::from_mode(0o755)).map_err(|error| error.to_string())?;
+        Ok(root.join("sysroot"))
+    }
+
+    #[cfg(unix)]
+    fn runtime_build(root: &Path, lean_sysroot: PathBuf) -> super::SemanticSearchRuntimeBuild {
+        super::SemanticSearchRuntimeBuild {
+            cache_root: root.join("cache"),
+            toolchain_label: "leanprover/lean4:v4.36.0".to_owned(),
+            lean_sysroot,
+        }
+    }
+
     #[test]
     #[cfg(unix)]
-    fn supervised_build_cancellation_never_materializes_or_launches() -> Result<(), String> {
+    fn cancelled_build_never_materializes_or_launches() -> Result<(), String> {
         let temp = temp_cache()?;
-        let result = super::build_cached_with_writer(
-            super::SemanticSearchRuntimeBuild {
-                cache_root: temp.path().to_path_buf(),
-                toolchain_label: "leanprover/lean4:v4.36.0".to_owned(),
-                lean_sysroot: temp.path().join("unused-sysroot"),
-            },
-            &temp.path().join("must-not-launch"),
-            std::time::Duration::from_secs(1),
-            || true,
-        );
+        let sysroot = temp.path().join("missing-sysroot");
+        let result = super::build(runtime_build(temp.path(), sysroot), || true);
         assert!(matches!(
             result,
             Err(Error(ErrorKind::SourcePackage {
                 source: lean_toolchain::SourcePackageError::Io { source, .. },
             })) if source.kind() == std::io::ErrorKind::Interrupted
         ));
-        let entries = fs::read_dir(temp.path().join(RUNTIME_SOURCE_DIGEST)).map_err(|error| error.to_string())?;
+        let entries =
+            fs::read_dir(temp.path().join("cache").join(RUNTIME_SOURCE_DIGEST)).map_err(|error| error.to_string())?;
         for entry in entries {
             assert!(!entry.map_err(|error| error.to_string())?.path().is_dir());
         }
@@ -683,89 +817,71 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn supervised_build_failed_admission_preserves_stale_source() -> Result<(), String> {
+    fn open_returns_current_modules_and_reports_a_needed_build() -> Result<(), String> {
         let temp = temp_cache()?;
-        let label = "leanprover/lean4:v4.36.0".to_owned();
-        let provenance = SemanticSearchRuntimeProvenance::new(&label);
-        let request = super::source_package_request(temp.path().to_path_buf(), &label, &provenance)
-            .map_err(|error| error.to_string())?;
-        let package = lean_toolchain::materialize_source_package(&request).map_err(|error| error.to_string())?;
-        let sentinel = package.project_root.join(SIDECAR_FILE_NAME);
-        fs::write(&sentinel, "active source must survive failed custody").map_err(|error| error.to_string())?;
-        let result = super::build_cached_with_writer(
-            super::SemanticSearchRuntimeBuild {
-                cache_root: temp.path().to_path_buf(),
-                toolchain_label: label,
-                lean_sysroot: temp.path().join("unused-sysroot"),
-            },
-            &temp.path().join("missing-helper"),
-            std::time::Duration::from_secs(1),
-            || false,
-        );
-        assert!(result.is_err(), "an absent helper cannot authorize mutation");
-        assert_eq!(read_string(&sentinel)?, "active source must survive failed custody");
+        let current = fake_sysroot(temp.path(), "mkdir -p .lake/build/lib/lean && exit 0")?;
+        let runtime = super::open(runtime_build(temp.path(), current)).map_err(|error| error.to_string())?;
+        assert!(runtime.module_dir().starts_with(runtime.package_root()));
+        let log = read_string(&runtime.package_root().join(super::LAKE_LOG_FILE_NAME))?;
+        assert!(log.is_empty());
+
+        let stale = fake_sysroot(temp.path(), "echo \"$@\"; exit 3")?;
+        let error = super::open(runtime_build(temp.path(), stale))
+            .err()
+            .ok_or("Lake reports a needed build")?;
+        assert!(error.needs_build(), "{error}");
+        let log = read_string(&runtime.package_root().join(super::LAKE_LOG_FILE_NAME))?;
+        assert_eq!(log.trim(), "build --no-build LeanSemanticSearch");
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_failed_build_reports_the_end_of_lake_output() -> Result<(), String> {
+        let temp = temp_cache()?;
+        let failing = fake_sysroot(temp.path(), "echo progress; echo 'error: build failed' >&2; exit 1")?;
+        let error = super::build(runtime_build(temp.path(), failing), || false)
+            .err()
+            .ok_or("Lake fails")?;
+        assert!(!error.needs_build());
+        let message = error.to_string();
+        assert!(message.contains("`lake build LeanSemanticSearch`"), "{message}");
+        assert!(message.contains("failed with exit status: 1"), "{message}");
+        assert!(message.ends_with("progress error: build failed"), "{message}");
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn cancellation_stops_a_running_lake() -> Result<(), String> {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let temp = temp_cache()?;
+        let slow = fake_sysroot(temp.path(), "sleep 30")?;
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let signal = Arc::clone(&cancelled);
+        let canceller = thread::spawn(move || {
+            thread::sleep(std::time::Duration::from_millis(300));
+            signal.store(true, Ordering::SeqCst);
+        });
+        let started = std::time::Instant::now();
+        let error = super::build(runtime_build(temp.path(), slow), || cancelled.load(Ordering::SeqCst))
+            .err()
+            .ok_or("the run is cancelled")?;
+        canceller.join().map_err(|_| "canceller panicked".to_owned())?;
+        assert!(error.to_string().contains("was cancelled and stopped"), "{error}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
         Ok(())
     }
 
     #[test]
     #[cfg(unix)]
     fn lake_detail_keeps_the_end_of_the_output_on_one_line() {
-        use std::os::unix::process::ExitStatusExt as _;
-        let output = std::process::Output {
-            status: std::process::ExitStatus::from_raw(256),
-            stdout: format!("{}\nerror: build failed\n", "progress ".repeat(1000)).into_bytes(),
-            stderr: b"stderr detail\n".to_vec(),
-        };
+        let output = format!("{}\nerror: build failed\nstderr detail\n", "progress ".repeat(1000));
         let detail = super::lake_detail(&output);
         assert!(!detail.contains('\n'));
         assert_eq!(detail.chars().count(), super::LAKE_DETAIL_CHARS);
         assert!(detail.ends_with("error: build failed stderr detail"));
-    }
-
-    fn writer_failure<'a>(error: &'a (dyn std::error::Error + 'static)) -> Option<&'a WriterFailure> {
-        let mut current = Some(error);
-        while let Some(source) = current {
-            if let Some(failure) = source.downcast_ref::<WriterFailure>() {
-                return Some(failure);
-            }
-            if let Some(failure) = source.downcast_ref::<std::io::Error>().and_then(WriterFailure::from_io) {
-                return Some(failure);
-            }
-            current = source.source();
-        }
-        None
-    }
-
-    #[test]
-    fn sdk_writer_failures_retain_disposition_and_stop_receipt() -> Result<(), String> {
-        for disposition in [
-            WriterDisposition::NotStarted,
-            WriterDisposition::Stopped,
-            WriterDisposition::Unknown,
-        ] {
-            let expected = WriterFailure {
-                disposition,
-                detail: "original SDK failure".to_owned(),
-                stop_receipt: (disposition == WriterDisposition::Stopped)
-                    .then(|| serde_json::json!({"opaque_test_stop_receipt": {"retained": true}})),
-            };
-            let mut errors = vec![Error::from(lean_toolchain::SourcePackageError::Io {
-                action: "test source failure",
-                path: PathBuf::from("source"),
-                source: std::io::Error::other(expected.clone()),
-            })];
-            #[cfg(unix)]
-            errors.push(Error::from(ErrorKind::Writer {
-                package_root: PathBuf::from("source"),
-                source: std::io::Error::other(expected.clone()),
-            }));
-            for error in errors {
-                let actual =
-                    writer_failure(&error).ok_or_else(|| "SDK execution evidence lost in source chain".to_owned())?;
-                assert_eq!(actual, &expected);
-            }
-        }
-        Ok(())
     }
 
     #[test]
