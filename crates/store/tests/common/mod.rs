@@ -3,7 +3,6 @@
 #![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use lean_semantic_search_contract::{
     DeclarationFeatureRow, Fingerprints, OpaqueFeatureKey, RoleFeature, SEMANTIC_FEATURE_VERSION, SourcePosition,
@@ -73,16 +72,40 @@ pub(crate) fn rich_declaration(id: &str) -> DeclarationFeatureRow {
     }
 }
 
-static COUNTER: AtomicU64 = AtomicU64::new(0);
+/// A store path inside its own temp directory. Dropping it removes the
+/// directory, so keep it alive while a builder or store uses the path.
+pub(crate) struct TempStorePath {
+    _dir: tempfile::TempDir,
+    path: PathBuf,
+}
 
-/// A unique temp path for one test, isolated by process id and a counter so
-/// parallel tests never collide.
-#[must_use]
-pub(crate) fn temp_path(tag: &str) -> PathBuf {
-    let serial = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mut path = std::env::temp_dir();
-    path.push(format!("lss-store-{}-{tag}-{serial}.sqlite", std::process::id()));
-    path
+impl std::ops::Deref for TempStorePath {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl AsRef<Path> for TempStorePath {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
+}
+
+/// A fresh store path for one test, in a directory of its own, so parallel
+/// tests never collide and a finished test leaves nothing behind.
+///
+/// # Errors
+///
+/// Returns the stringified I/O error if the temp directory cannot be created.
+pub(crate) fn temp_path(tag: &str) -> Result<TempStorePath, String> {
+    let dir = tempfile::Builder::new()
+        .prefix(&format!("lss-store-{tag}-"))
+        .tempdir()
+        .map_err(|error| error.to_string())?;
+    let path = dir.path().join(format!("{tag}.sqlite"));
+    Ok(TempStorePath { _dir: dir, path })
 }
 
 /// Build and publish a corpus from rows (declaration announced, then featured),

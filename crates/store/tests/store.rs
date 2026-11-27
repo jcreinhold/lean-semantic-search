@@ -26,7 +26,8 @@ fn sample() -> Vec<DeclarationFeatureRow> {
 
 #[test]
 fn fanout_counts_match_direct_inspection() -> Result<(), String> {
-    let store = build_store(&temp_path("fanout"), "tok", &sample())?;
+    let path = temp_path("fanout")?;
+    let store = build_store(&path, "tok", &sample())?;
     let keys = vec![
         key("canon-a-stmt"),   // carried by d1, d2
         key("shared-role"),    // carried by d1, d2
@@ -40,7 +41,8 @@ fn fanout_counts_match_direct_inspection() -> Result<(), String> {
 
 #[test]
 fn postings_return_matching_id_sets() -> Result<(), String> {
-    let store = build_store(&temp_path("postings"), "tok", &sample())?;
+    let path = temp_path("postings")?;
+    let store = build_store(&path, "tok", &sample())?;
 
     let mut shared = store.postings(&key("canon-a-stmt"), 100);
     shared.sort();
@@ -57,16 +59,18 @@ fn postings_return_matching_id_sets() -> Result<(), String> {
 #[test]
 fn declaration_row_round_trips_exactly() -> Result<(), String> {
     let row = rich_declaration("rich");
-    let store = build_store(&temp_path("roundtrip"), "tok", std::slice::from_ref(&row))?;
+    let path = temp_path("roundtrip")?;
+    let store = build_store(&path, "tok", std::slice::from_ref(&row))?;
 
     assert_eq!(store.declaration_row("rich"), Some(row));
     assert_eq!(store.declaration_row("absent"), None);
     Ok(())
 }
 
-/// Build a store feeding the items in exactly the given order, then open it.
-fn build_in_order(tag: &str, items: Vec<Ingest>) -> Result<Store, String> {
-    let mut builder = StoreBuilder::create(temp_path(tag), "tok").map_err(|e| e.to_string())?;
+/// Build a store at `path` feeding the items in exactly the given order, then
+/// open it.
+fn build_in_order(path: &std::path::Path, items: Vec<Ingest>) -> Result<Store, String> {
+    let mut builder = StoreBuilder::create(path, "tok").map_err(|e| e.to_string())?;
     for item in items {
         builder.accept(item).map_err(|e| e.to_string())?;
     }
@@ -93,8 +97,10 @@ fn pairing_is_order_agnostic() -> Result<(), String> {
     let mut reversed: Vec<Ingest> = rows.iter().map(|row| Ingest::Feature(row.clone())).collect();
     reversed.extend(rows.iter().map(|row| Ingest::Declaration(row.declaration_id.clone())));
 
-    let a = build_in_order("order-a", interleaved)?;
-    let b = build_in_order("order-b", reversed)?;
+    let path_a = temp_path("order-a")?;
+    let path_b = temp_path("order-b")?;
+    let a = build_in_order(&path_a, interleaved)?;
+    let b = build_in_order(&path_b, reversed)?;
 
     assert_eq!(a.document_total(), b.document_total());
     for row in &rows {
@@ -114,8 +120,9 @@ fn pairing_is_order_agnostic() -> Result<(), String> {
 fn unpaired_halves_are_not_indexed() -> Result<(), String> {
     // A feature with no announcement, and an announcement with no feature: both
     // are incomplete and must not enter the corpus.
+    let path = temp_path("unpaired")?;
     let store = build_in_order(
-        "unpaired",
+        &path,
         vec![
             Ingest::Feature(declaration("featured-only", fingerprints("x"), Vec::new())),
             Ingest::Declaration("announced-only".to_owned()),
@@ -128,7 +135,7 @@ fn unpaired_halves_are_not_indexed() -> Result<(), String> {
 
 #[test]
 fn dropped_build_leaves_no_final_path() -> Result<(), String> {
-    let path = temp_path("dropped");
+    let path = temp_path("dropped")?;
     let temp = building_sibling(&path);
     {
         let mut builder = StoreBuilder::create(&path, "tok").map_err(|e| e.to_string())?;
@@ -147,7 +154,7 @@ fn dropped_build_leaves_no_final_path() -> Result<(), String> {
 
 #[test]
 fn interrupted_rebuild_leaves_prior_corpus_intact() -> Result<(), String> {
-    let path = temp_path("rebuild");
+    let path = temp_path("rebuild")?;
     let temp = building_sibling(&path);
 
     // Publish an original corpus.

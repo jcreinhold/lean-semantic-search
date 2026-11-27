@@ -39,7 +39,7 @@ fn assert_clean(identifier: &str) {
 
 #[test]
 fn schema_carries_no_consumer_vocabulary() -> Result<(), String> {
-    let path = temp_path("boundary");
+    let path = temp_path("boundary")?;
     let _store = build_store(&path, "tok", std::slice::from_ref(&rich_declaration("rich")))?;
 
     let flags = OpenFlags::SQLITE_OPEN_READ_ONLY;
@@ -75,7 +75,7 @@ fn schema_carries_no_consumer_vocabulary() -> Result<(), String> {
 
 #[test]
 fn metadata_keys_are_exactly_the_recorded_facts() -> Result<(), String> {
-    let path = temp_path("boundary-meta");
+    let path = temp_path("boundary-meta")?;
     let _store = build_store(&path, "tok", std::slice::from_ref(&rich_declaration("rich")))?;
 
     let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(|e| e.to_string())?;

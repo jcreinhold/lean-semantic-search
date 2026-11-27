@@ -69,7 +69,7 @@ struct Measurement {
 /// Build a corpus of `documents` rows streaming (one row resident at a time),
 /// then measure the peak Rust heap and latency of a single query against it.
 fn measure(documents: usize) -> Result<Measurement, String> {
-    let path = temp_path(&format!("bench-{documents}"));
+    let path = temp_path(&format!("bench-{documents}"))?;
 
     let build_start = Instant::now();
     let mut builder = StoreBuilder::create(&path, "bench").map_err(|e| e.to_string())?;
@@ -96,7 +96,6 @@ fn measure(documents: usize) -> Result<Measurement, String> {
     let candidates = retrieval.candidates.len();
     drop(profiler);
 
-    std::fs::remove_file(&path).ok();
     Ok(Measurement {
         documents,
         build,

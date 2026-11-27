@@ -39,7 +39,8 @@ fn single_corpus_ranking_matches_in_memory() -> Result<(), String> {
     let anchor = Anchor::from_declaration(&anchor_row());
 
     let index = SemanticIndex::from_declarations(&rows);
-    let store = build_store(&temp_path("parity-single"), "token-a", &rows)?;
+    let path = temp_path("parity-single")?;
+    let store = build_store(&path, "token-a", &rows)?;
 
     let from_index = retrieve_across(&[&index], &anchor, 3);
     let from_store = retrieve_across(&[&store], &anchor, 3);
@@ -90,8 +91,10 @@ fn multi_corpus_fan_out_matches_in_memory() -> Result<(), String> {
 
     let index_left = SemanticIndex::from_declarations(&left);
     let index_right = SemanticIndex::from_declarations(&right);
-    let store_left = build_store(&temp_path("parity-left"), "token-l", &left)?;
-    let store_right = build_store(&temp_path("parity-right"), "token-r", &right)?;
+    let path_left = temp_path("parity-left")?;
+    let path_right = temp_path("parity-right")?;
+    let store_left = build_store(&path_left, "token-l", &left)?;
+    let store_right = build_store(&path_right, "token-r", &right)?;
 
     let from_index = retrieve_across(&[&index_left, &index_right], &anchor, 5);
     let from_store = retrieve_across(&[&store_left, &store_right], &anchor, 5);
@@ -113,7 +116,8 @@ fn proof_goal_anchor_matches_in_memory() -> Result<(), String> {
     let anchor = Anchor::from_proof_goal(&goal);
 
     let index = SemanticIndex::from_declarations(&rows);
-    let store = build_store(&temp_path("parity-goal"), "token-g", &rows)?;
+    let path = temp_path("parity-goal")?;
+    let store = build_store(&path, "token-g", &rows)?;
 
     assert_eq!(
         retrieve_across(&[&index], &anchor, 4),
