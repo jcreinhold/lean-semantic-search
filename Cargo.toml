@@ -12,7 +12,6 @@ version = "0.9.0"
 
 [workspace.dependencies]
 lean-semantic-search-contract = { path = "crates/contract", version = "0.9.0" }
-lean-semantic-search-retrieval = { path = "crates/retrieval", version = "0.9.0" }
 lean-toolchain = { version = "0.12.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
