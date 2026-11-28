@@ -10,8 +10,11 @@ must have a corresponding `## [X.Y.Z]` section here.
 
 ## [Unreleased]
 
+## [0.9.0]
+
 ### Changed
 
+- Breaking: builds against lean-rs 0.12 (`lean-toolchain` 0.12.0); `cargo deny` refuses older lean-rs crates.
 - Breaking: `build_cached_with_writer` is gone. `build(input, cancelled)` runs `lake build LeanSemanticSearch` in the
   materialized package, in its own process group, with a two-minute limit; a timeout or cancellation stops the whole
   group. `open(input)` runs `lake build --no-build LeanSemanticSearch`, so Lake decides whether the modules are current,
